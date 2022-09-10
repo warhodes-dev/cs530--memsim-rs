@@ -2,33 +2,53 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::error::Error;
 
-#[derive(Default, Debug)]
-pub struct Config {
-    /* TLB configuration */
-    pub tlb_sets: u32,
-    pub tlb_set_size: u32,
+use crate::utils::error;
 
-    /* Page Table configuration */
+const MAX_TLB_SETS: u32 = 256;
+const MAX_DC_SETS: u32 = 8192;
+const MAX_ASSOC: u32 = 8;
+const MAX_VIRT_PAGES: u32 = 8192;
+const MAX_PHYS_PAGES: u32 = 1024;
+const MAX_REF_ADDR_LEN: u32 = 32;
+const MIN_DC_LINE_SZ: u32 = 8;
+const MIN_L2_LINE_SIZE: u32 = MIN_DC_LINE_SZ;
+
+#[derive(Debug)]
+pub struct TLBConfig {
+    pub sets: u32,
+    pub set_size: u32,
+    pub idx_size: u32,
+    pub enabled: bool,
+}
+
+#[derive(Debug)]
+pub struct PageTableConfig {
     pub virtual_pages: u32,
     pub physical_pages: u32,
     pub page_size: u32,
-
-    /* Data (L1) Cache configuration */
-    pub dc_sets: u32,
-    pub dc_set_size: u32,
-    pub dc_line_size: u32,
-
-    /* L2 Cache configuration */
-    pub l2_sets: u32,
-    pub l2_set_size: u32,
-    pub l2_line_size: u32,
-
-    /* Boolean parameters */
-    pub dc_write_alloc_enabled: bool,
-    pub l2_write_alloc_enabled: bool,
+    pub idx_size: u32,
+    pub offset_size: u32,
     pub virtual_addrs_enabled: bool,
-    pub tlb_enabled: bool,
-    pub l2_cache_enabled: bool,
+}
+
+#[derive(Debug)]
+pub struct CacheConfig {
+    pub sets: u32,
+    pub set_size: u32,
+    pub line_size: u32,
+    pub idx_size: u32,
+    pub offset_size: u32,
+    pub assoc: u32,
+    pub walloc_enabled: bool,
+    pub enabled: bool,
+}
+
+#[derive(Debug)]
+pub struct Config {
+    tlb: TLBConfig,
+    pt: PageTableConfig,
+    dc: CacheConfig,
+    l2: CacheConfig,
 }
 
 impl Config {
@@ -49,30 +69,147 @@ impl Config {
         }
 
         if opts.len() != 16 {
-            return Err( format!("Expected 16 configuration parameters, \
-                                Found {}", opts.len()).into())
+            error!("Expected 16 configuration parameters, Found {}", opts.len());
         }
 
-        // Assume config file is always in the same order
-        Ok( Config {
-            tlb_sets:       opts[0].parse::<u32>()?,
-            tlb_set_size:   opts[1].parse::<u32>()?,
-            virtual_pages:  opts[2].parse::<u32>()?,
-            physical_pages: opts[3].parse::<u32>()?,
-            page_size:      opts[4].parse::<u32>()?,
-            dc_sets:        opts[5].parse::<u32>()?,
-            dc_set_size:    opts[6].parse::<u32>()?,
-            dc_line_size:   opts[7].parse::<u32>()?,
-            l2_sets:        opts[9].parse::<u32>()?,
-            l2_set_size:    opts[10].parse::<u32>()?,
-            l2_line_size:   opts[11].parse::<u32>()?,
+        // Assume config file is always in correct order
+        let tlb = {
+            let sets = opts[0].parse::<u32>()?;
+            let set_size = opts[1].parse::<u32>()?;
+            let idx_size   = 0;
+		    let enabled = opts[14] == "y";
+            TLBConfig { sets, set_size, idx_size, enabled }
+        };
 
-            dc_write_alloc_enabled: opts[8] == "y",
-            l2_write_alloc_enabled: opts[12] == "y",
-            virtual_addrs_enabled:  opts[13] == "y",
-            tlb_enabled:            opts[14] == "y",
-            l2_cache_enabled:       opts[15] == "y",
-        })
+        let pt = {
+            let virtual_pages = opts[2].parse::<u32>()?;
+            let physical_pages = opts[3].parse::<u32>()?;
+            let page_size = opts[4].parse::<u32>()?;
+            let idx_size = 0;
+            let offset_size = 0;
+		    let virtual_addrs_enabled = opts[13] == "y";
+            PageTableConfig {
+                virtual_pages,
+                physical_pages,
+                page_size,
+                idx_size,
+                offset_size,
+                virtual_addrs_enabled,
+            }
+        };
 
+        let dc = {
+            let sets = opts[5].parse::<u32>()?;
+            let set_size = opts[6].parse::<u32>()?;
+            let line_size = opts[7].parse::<u32>()?;
+            let idx_size = 0;
+            let offset_size = 0;
+            let assoc = sets / set_size;
+		    let walloc_enabled = opts[8] != "y";
+            CacheConfig {
+                sets,
+                set_size,
+                line_size,
+                idx_size,
+                offset_size,
+                assoc,
+                walloc_enabled,
+                enabled: true,
+            }
+        };
+
+        let l2 = {
+            let sets = opts[9].parse::<u32>()?;
+            let set_size = opts[10].parse::<u32>()?;
+            let line_size = opts[11].parse::<u32>()?;
+            let idx_size = 0;
+            let offset_size = 0;
+            let assoc = sets / set_size;
+		    let walloc_enabled = opts[12] != "y";
+		    let enabled = opts[15] == "y";
+            CacheConfig {
+                sets,
+                set_size,
+                line_size,
+                idx_size,
+                offset_size,
+                assoc,
+                walloc_enabled,
+                enabled,
+            }
+        };
+
+        let config = Config{tlb, pt, dc, l2};
+
+        if config.tlb.sets > MAX_TLB_SETS {
+            error!("{} TLB sets specified but max is {}", config.tlb.sets, MAX_TLB_SETS);
+        }
+        if config.dc.sets > MAX_DC_SETS {
+            error!("{} DC sets specified but max is {}", config.dc.sets, MAX_DC_SETS);
+        }
+
+
+        Ok(config)
     }
 }
+
+impl std::fmt::Display for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+        writeln!(f, "Data TLB contains {} sets.",    self.tlb.sets)?;
+        writeln!(f, "Each set contains {} entries.", self.tlb.set_size)?;
+        //TODO: what?
+        //writeln!(f, "Number of bits used for the index is {}.", self.tlb)?;
+        writeln!(f)?;
+
+        writeln!(f, "Number of virtual pages is {}.", self.pt.virtual_pages)?;
+        writeln!(f, "Number of physical pages is {}.", self.pt.physical_pages)?;
+        writeln!(f, "Each page contains {} bytes.", self.pt.page_size)?;
+        //writeln!(f, "Number of bits used for the page table index is {}.", )?;
+        //writeln!(f, "Number of bits used for the page offset is {}.", )?;
+        writeln!(f)?;
+
+        writeln!(f, "D-cache contains {} sets.", self.dc.sets)?;
+        writeln!(f, "Each set contains {} entries.", self.dc.set_size)?;
+        writeln!(f, "Each line is {} bytes.", self.dc.line_size)?;
+        writeln!(f, "The cache {} a write-allocate and write-back policy.", 
+                if self.dc.walloc_enabled { "uses" } else { "does not use" })?;
+        //writeln!(f, "Number of bits used for the index is {}.", )?;
+        //writeln!(f, "Number of bits used for the offset is {}.", )?;
+        writeln!(f)?;
+
+        writeln!(f, "L2-cache contains {} sets.", self.l2.sets)?;
+        writeln!(f, "Each set contains {} entries.", self.l2.set_size)?;
+        writeln!(f, "Each line is {} bytes.", self.l2.line_size)?;
+        writeln!(f, "The cache {} a write-allocate and write-back policy.", 
+                if self.l2.walloc_enabled { "uses" } else { "does not use" })?;
+        //writeln!(f, "Number of bits used for the index is {}.", )?;
+        //writeln!(f, "Number of bits used for the offset is {}.", )?;
+        writeln!(f)?;
+
+        writeln!(f, "The addresses read in {} virtual addresses.", 
+                if self.pt.virtual_addrs_enabled { "are" } else { "are not" })?;
+
+        if !self.tlb.enabled {
+            writeln!(f, "TLB is disabled in this configuration.")?;
+        }
+
+        if !self.l2.enabled {
+            writeln!(f, "L2 cache is disabled in this configuration")?;
+        }
+        Ok(())
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+//
