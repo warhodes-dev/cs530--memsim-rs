@@ -7,22 +7,37 @@ pub mod utils;
 
 use crate::{
     config::Config,
+    /*
     trace::{
         TraceReader,
         TraceRef,
     }
+    */
 };
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config_path = "../memhier/trace.config";
-    let config = Config::from_file(config_path)
-        .expect("Failed to open config");
+fn main() {
+    let config_path = "./trace.config";
+    let config = match Config::from_file(config_path) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Error reading config: {e}");
+            return;
+        }
+    };
     println!("{}", config);
 
+    /*
     let trace_path = "../memhier/long_trace.dat";
-    let trace_reader = TraceReader::from_file(trace_path)
-    //let trace_reader = TraceReader::from_stdin();
-        .expect("Failed to read from stdin");
+//  let trace_reader = match TraceReader::from_stdin() {
+    let trace_reader = match TraceReader::from_file(trace_path) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("Error reading trace from file: {e}");
+//          eprintln!("Error reading trace from stdin: {e}");
+            return;
+        }
+    };
+
 
     println!("TRACE SUCCESSFULLY LOADED:");
     for trace_event in trace_reader {
@@ -31,6 +46,5 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             TraceRef::Write(e) => println!("wr: {:#08x}", e),
         }
     }
-
-    Ok(())
+    */
 }
