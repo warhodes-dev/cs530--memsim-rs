@@ -237,8 +237,8 @@ impl std::fmt::Display for Config {
         writeln!(f, "Number of bits used for the offset is {}.", self.l2.offset_size)?;
         writeln!(f)?;
 
-        writeln!(f, "The addresses read in {} virtual addresses.", 
-                if self.pt.virtual_addrs_enabled { "are" } else { "are not" })?;
+        writeln!(f, "The addresses read in are {} addresses.", 
+                if self.pt.virtual_addrs_enabled { "virtual" } else { "physical" })?;
 
         if !self.tlb.enabled {
             writeln!(f, "TLB is disabled in this configuration.")?;
