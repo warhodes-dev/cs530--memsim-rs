@@ -1,9 +1,4 @@
 /// Easily performs a `return Err(format!("..."))` for maximum laziness
-macro_rules! error2 {
-    ($base:expr, $($args:expr),*) => {{
-        return Err(format!($base, $($args),*).into());
-    }}
-}
 macro_rules! error {
     ($($args:tt)*) => {{
         return Err(format!($($args)*).into());

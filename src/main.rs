@@ -7,12 +7,10 @@ pub mod utils;
 
 use crate::{
     config::Config,
-    /*
     trace::{
         TraceReader,
         TraceRef,
     }
-    */
 };
 
 fn main() {
@@ -26,18 +24,22 @@ fn main() {
     };
     println!("{}", config);
 
-    /*
-    let trace_path = "../memhier/long_trace.dat";
-//  let trace_reader = match TraceReader::from_stdin() {
-    let trace_reader = match TraceReader::from_file(trace_path) {
+    // This is gross on purpose. Returning 'static handles was not
+    // added until rustc version 1.61.0. For now, we must instantiate
+    // the stdin lock in main before passing it into impl TraceReader
+    // (since TraceReader::from__() returns a iterator over 'lines').
+    let stdin = std::io::stdin();
+    let stdin_lock = stdin.lock();
+//  let trace_path = "../memhier/long_trace.dat";
+    let trace_reader = match TraceReader::from_stdin(stdin_lock) {
+//  let trace_reader = match TraceReader::from_file(trace_path) {
         Ok(t) => t,
         Err(e) => {
-            eprintln!("Error reading trace from file: {e}");
-//          eprintln!("Error reading trace from stdin: {e}");
+//          eprintln!("Error reading trace from file: {e}");
+            eprintln!("Error reading trace from stdin: {e}");
             return;
         }
     };
-
 
     println!("TRACE SUCCESSFULLY LOADED:");
     for trace_event in trace_reader {
@@ -46,5 +48,4 @@ fn main() {
             TraceRef::Write(e) => println!("wr: {:#08x}", e),
         }
     }
-    */
 }

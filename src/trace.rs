@@ -11,9 +11,8 @@ pub enum TraceRef {
 pub struct TraceReader;
 
 impl TraceReader {
-    pub fn from_stdin() -> Result<impl Iterator<Item = TraceRef>, Box<dyn Error>> {
-        let lines = io::stdin().lock()
-            .lines()
+    pub fn from_stdin(stdin_lock: io::StdinLock) -> Result<impl Iterator<Item = TraceRef> + '_, Box<dyn Error>> {
+        let lines = stdin_lock.lines()
             .filter_map(|line| line.ok())
             .filter(|line| !line.is_empty() && line.contains(':'));
 
