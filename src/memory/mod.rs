@@ -4,7 +4,7 @@ mod cache;
 use crate::{
     trace,
     config,
-    hw::{
+    memory::{
         page::PageTable, 
         cache::Cache, 
         tlb::Tlb,
@@ -21,7 +21,6 @@ pub struct Memory {
 impl Memory {
     pub fn new(config: config::Config) -> Self {
         let tlb = Tlb::new(config.tlb);
-        println!("TLB: {:?}", tlb);
         let pt = PageTable::new(config.pt);
         let dc = Cache::new(config.dc);
         let l2 = Cache::new(config.l2);

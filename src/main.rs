@@ -4,7 +4,7 @@
 mod config;
 mod trace;
 mod utils;
-mod hw;
+mod memory;
 
 use crate::{
     config::Config,
@@ -12,7 +12,7 @@ use crate::{
         TraceReader,
         RawTrace,
     },
-    hw::{
+    memory::{
         Memory,
     }
 };

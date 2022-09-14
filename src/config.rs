@@ -37,11 +37,11 @@ pub struct PageTableConfig {
 
 #[derive(Debug)]
 pub struct CacheConfig {
-    pub sets: u32,
-    pub set_entries: u32,
-    pub line_size: u32,
-    pub idx_size: u32,
-    pub offset_size: u32,
+    pub sets: usize,
+    pub set_entries: usize,
+    pub line_size: usize,
+    pub idx_size: usize,
+    pub offset_size: usize,
     pub walloc_enabled: bool,
     pub enabled: bool,
 }
@@ -79,7 +79,7 @@ impl Config {
         let tlb_config = {
             let sets = opts[0].parse::<usize>()?;
             let set_entries = opts[1].parse::<usize>()?;
-            let idx_size   = utils::min_bits(sets as u32);
+            let idx_size   = utils::min_bits(sets as u32) as usize;
 		    let enabled = opts[14] == "y";
             
             if sets > MAX_TLB_SETS {
@@ -97,11 +97,11 @@ impl Config {
 
 
         let pt_config = {
-            let virtual_pages = opts[2].parse::<u32>()?;
-            let physical_pages = opts[3].parse::<u32>()?;
-            let page_size = opts[4].parse::<u32>()?;
-            let idx_size = utils::min_bits(virtual_pages);
-            let offset_size = utils::min_bits(page_size);
+            let virtual_pages = opts[2].parse::<usize>()?;
+            let physical_pages = opts[3].parse::<usize>()?;
+            let page_size = opts[4].parse::<usize>()?;
+            let idx_size = utils::min_bits(virtual_pages as u32) as usize;
+            let offset_size = utils::min_bits(page_size as u32) as usize;
 		    let virtual_addrs_enabled = opts[13] == "y";
 
             if virtual_pages > MAX_VIRT_PAGES {
@@ -110,10 +110,10 @@ impl Config {
             if physical_pages > MAX_PHYS_PAGES {
                 error!("The number of physical pages is {} but max is {}.", physical_pages, MAX_VIRT_PAGES);
             }
-            if !utils::is_pow2(virtual_pages) {
+            if !utils::is_pow2(virtual_pages as u32) {
                 error!("# of virtual pages is {} but must be a power of 2", virtual_pages);
             }
-            if !utils::is_pow2(virtual_pages) {
+            if !utils::is_pow2(virtual_pages as u32) {
                 error!("Page size is {} but must be a power of 2", page_size);
             }
 
@@ -128,11 +128,11 @@ impl Config {
         };
 
         let dc_config = {
-            let sets = opts[5].parse::<u32>()?;
-            let set_entries = opts[6].parse::<u32>()?;
-            let line_size = opts[7].parse::<u32>()?;
-            let idx_size = utils::min_bits(sets);
-            let offset_size = utils::min_bits(line_size);
+            let sets = opts[5].parse::<usize>()?;
+            let set_entries = opts[6].parse::<usize>()?;
+            let line_size = opts[7].parse::<usize>()?;
+            let idx_size = utils::min_bits(sets as u32) as usize;
+            let offset_size = utils::min_bits(line_size as u32) as usize;
 		    let walloc_enabled = opts[8] != "y";
 
             if sets > MAX_DC_SETS {
@@ -163,11 +163,11 @@ impl Config {
         };
 
         let l2_config = {
-            let sets = opts[9].parse::<u32>()?;
-            let set_entries = opts[10].parse::<u32>()?;
-            let line_size = opts[11].parse::<u32>()?;
-            let idx_size = utils::min_bits(sets);
-            let offset_size = utils::min_bits(line_size);
+            let sets = opts[9].parse::<usize>()?;
+            let set_entries = opts[10].parse::<usize>()?;
+            let line_size = opts[11].parse::<usize>()?;
+            let idx_size = utils::min_bits(sets as u32) as usize;
+            let offset_size = utils::min_bits(line_size as u32) as usize;
 		    let walloc_enabled = opts[12] != "y";
 		    let enabled = opts[15] == "y";
 

@@ -1,14 +1,14 @@
 use crate::config;
 
-#[derive(Debug)]
-struct TlbEntry {
+#[derive(Debug, Copy, Clone)]
+pub struct TlbEntry {
     tag: u32,
     // TODO: change this to PhysicalAddr from page.rs
     phys_addr: u32,
 }
 
 // "index" refers to the index of the set, not set entries
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Tlb(
     Vec< // Sets
         Vec< // Set Entries
@@ -17,8 +17,11 @@ pub struct Tlb(
 impl Tlb {
     pub fn new(config: config::TLBConfig) -> Self {
         let empty_set = vec![ None ; config.set_entries ];
-        let tlb = vec![
+        let tlb_inner = vec![ empty_set ; config.sets ];
+        Tlb(tlb_inner)
+    }
 
-        ]
+    pub fn lookup(&self, i: usize) -> TlbEntry {
+        unimplemented!()
     }
 }

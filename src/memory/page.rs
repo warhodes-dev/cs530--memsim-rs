@@ -16,4 +16,6 @@ struct VirtualAddr {
 }
 
 // 1100 | 1000 0010
-//    
+// | ||
+//  Y  L___ TLB index
+//  L___ TLB tag
