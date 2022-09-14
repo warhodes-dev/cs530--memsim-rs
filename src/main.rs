@@ -1,17 +1,27 @@
 /* Austin Rhodes
  * PA 1: Memory Hierarchy Simulation
  * COSC 530 -- Fall 2022 */
-pub mod config;
-pub mod trace;
-pub mod utils;
+mod config;
+mod trace;
+mod utils;
+mod hw;
 
 use crate::{
     config::Config,
     trace::{
         TraceReader,
-        TraceRef,
+        RawTrace,
+    },
+    hw::{
+        Memory,
     }
 };
+
+#[allow(dead_code)]
+const TABLE_HEADER: &str =
+    "Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2\n\
+     Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n\
+     -------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
 
 fn main() {
     let config_path = "./trace.config";
@@ -40,12 +50,17 @@ fn main() {
             return;
         }
     };
-
     println!("TRACE SUCCESSFULLY LOADED:");
+
+    let mem = Memory::new(config);
+
     for trace_event in trace_reader {
+        println!("")
+        /*
         match trace_event {
-            TraceRef::Read(e) => println!("rd: {:#08x}", e),
-            TraceRef::Write(e) => println!("wr: {:#08x}", e),
+            RawTrace::Read(e) => println!("rd: {:#08x}", e),
+            RawTrace::Write(e) => println!("wr: {:#08x}", e),
         }
+        */
     }
 }
