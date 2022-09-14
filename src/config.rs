@@ -4,34 +4,34 @@ use std::error::Error;
 
 use crate::utils::{self, error};
 
-const MAX_TLB_SETS: u32 = 256;
-const MAX_DC_SETS: u32 = 8192;
-const MAX_TLB_ASSOC: u32 = 8;
-const MAX_DC_ASSOC: u32 = 8;
-const MAX_L2_ASSOC: u32 = 8;
-const MAX_VIRT_PAGES: u32 = 8192;
-const MAX_PHYS_PAGES: u32 = 1024;
-const MIN_DC_LINE_SIZE: u32 = 8;
-const MIN_L2_LINE_SIZE: u32 = MIN_DC_LINE_SIZE;
+const MAX_TLB_SETS: usize = 256;
+const MAX_TLB_ASSOC: usize = 8;
+const MAX_VIRT_PAGES: usize = 8192;
+const MAX_PHYS_PAGES: usize = 1024;
+const MAX_DC_SETS: usize = 8192;
+const MAX_DC_ASSOC: usize = 8;
+const MIN_DC_LINE_SIZE: usize = 8;
+const MAX_L2_ASSOC: usize = 8;
+const MIN_L2_LINE_SIZE: usize = MIN_DC_LINE_SIZE;
 #[allow(dead_code)]
 const MAX_REF_ADDR_LEN: u32 = 32;
 
 
 #[derive(Debug)]
 pub struct TLBConfig {
-    pub sets: u32,
-    pub set_entries: u32,
-    pub idx_size: u32,
+    pub sets: usize,
+    pub set_entries: usize,
+    pub idx_size: usize,
     pub enabled: bool,
 }
 
 #[derive(Debug)]
 pub struct PageTableConfig {
-    pub virtual_pages: u32,
-    pub physical_pages: u32,
-    pub page_size: u32,
-    pub idx_size: u32,
-    pub offset_size: u32,
+    pub virtual_pages: usize,
+    pub physical_pages: usize,
+    pub page_size: usize,
+    pub idx_size: usize,
+    pub offset_size: usize,
     pub virtual_addrs_enabled: bool,
 }
 
@@ -48,10 +48,10 @@ pub struct CacheConfig {
 
 #[derive(Debug)]
 pub struct Config {
-    tlb: TLBConfig,
-    pt: PageTableConfig,
-    dc: CacheConfig,
-    l2: CacheConfig,
+    pub tlb: TLBConfig,
+    pub pt: PageTableConfig,
+    pub dc: CacheConfig,
+    pub l2: CacheConfig,
 }
 
 impl Config {
@@ -77,9 +77,9 @@ impl Config {
         }
 
         let tlb_config = {
-            let sets = opts[0].parse::<u32>()?;
-            let set_entries = opts[1].parse::<u32>()?;
-            let idx_size   = utils::min_bits(sets);
+            let sets = opts[0].parse::<usize>()?;
+            let set_entries = opts[1].parse::<usize>()?;
+            let idx_size   = utils::min_bits(sets as u32);
 		    let enabled = opts[14] == "y";
             
             if sets > MAX_TLB_SETS {
@@ -110,10 +110,10 @@ impl Config {
             if physical_pages > MAX_PHYS_PAGES {
                 error!("The number of physical pages is {} but max is {}.", physical_pages, MAX_VIRT_PAGES);
             }
-            if virtual_pages.count_ones() != 1 {
+            if !utils::is_pow2(virtual_pages) {
                 error!("# of virtual pages is {} but must be a power of 2", virtual_pages);
             }
-            if page_size.count_ones() != 1 {
+            if !utils::is_pow2(virtual_pages) {
                 error!("Page size is {} but must be a power of 2", page_size);
             }
 

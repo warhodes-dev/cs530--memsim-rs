@@ -1,3 +1,5 @@
+
+
 /// Easily performs a `return Err(format!("..."))` for maximum laziness
 macro_rules! error {
     ($($args:tt)*) => {{
@@ -15,3 +17,8 @@ pub const fn bit_size<T>() -> usize {
 pub fn min_bits(n: u32) -> u32 {
     bit_size::<u32>() as u32 - n.leading_zeros() - 1
 }
+
+pub fn is_pow2(n: u32) -> bool {
+    n.count_ones() == 1
+}
+
