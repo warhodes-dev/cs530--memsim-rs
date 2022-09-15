@@ -8,6 +8,15 @@ pub enum RawTrace {
     Write(u32),
 }
 
+impl RawTrace {
+    pub fn addr(&self) -> u32 {
+        match self {
+            RawTrace::Read(e) => e.clone(),
+            RawTrace::Write(e) => e.clone(),
+        }
+    }
+}
+
 pub struct TraceReader;
 
 impl TraceReader {
