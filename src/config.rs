@@ -32,7 +32,7 @@ pub struct PageTableConfig {
     pub page_size: usize,
     pub idx_size: usize,
     pub offset_size: usize,
-    pub virtual_addrs_enabled: bool,
+    pub enabled: bool,
 }
 
 #[derive(Debug)]
@@ -102,7 +102,7 @@ impl Config {
             let page_size = opts[4].parse::<usize>()?;
             let idx_size = utils::min_bits(virtual_pages as u32) as usize;
             let offset_size = utils::min_bits(page_size as u32) as usize;
-		    let virtual_addrs_enabled = opts[13] == "y";
+		    let enabled = opts[13] == "y";
 
             if virtual_pages > MAX_VIRT_PAGES {
                 error!("The number of virtual pages is {} but max is {}.", virtual_pages, MAX_VIRT_PAGES);
@@ -123,7 +123,7 @@ impl Config {
                 page_size,
                 idx_size,
                 offset_size,
-                virtual_addrs_enabled,
+                enabled,
             }
         };
 
@@ -238,7 +238,7 @@ impl std::fmt::Display for Config {
         writeln!(f)?;
 
         writeln!(f, "The addresses read in are {} addresses.", 
-                if self.pt.virtual_addrs_enabled { "virtual" } else { "physical" })?;
+                if self.pt.enabled { "virtual" } else { "physical" })?;
 
         if !self.tlb.enabled {
             writeln!(f, "TLB is disabled in this configuration.")?;

@@ -58,12 +58,6 @@ fn main() {
 
     println!("{}", TABLE_HEADER);
     for trace_event in trace_reader {
-        println!("")
-        /*
-        match trace_event {
-            RawTrace::Read(e) => println!("rd: {:#08x}", e),
-            RawTrace::Write(e) => println!("wr: {:#08x}", e),
-        }
-        */
+        println!("{}", mem.access(trace_event));
     }
 }

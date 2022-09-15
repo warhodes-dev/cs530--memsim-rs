@@ -1,11 +1,13 @@
 use crate::config;
 
 pub struct Cache {
-    
+    cfg: config::CacheConfig,
 }
 
 impl Cache {
-    pub fn new(config: config::CacheConfig) -> Self {
-        unimplemented!()
+    pub fn new(cfg: config::CacheConfig) -> Self {
+        Cache {
+            cfg,
+        }
     }
 }

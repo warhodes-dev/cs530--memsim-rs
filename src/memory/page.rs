@@ -1,12 +1,14 @@
 use crate::config;
 
 pub struct PageTable {
-
+    pub cfg: config::PageTableConfig
 }
 
 impl PageTable {
-    pub fn new(config: config::PageTableConfig) -> Self {
-        unimplemented!()
+    pub fn new(cfg: config::PageTableConfig) -> Self {
+        PageTable {
+            cfg,
+        }
     }
 }
 

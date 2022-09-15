@@ -26,54 +26,61 @@ impl Memory {
         let l2 = Cache::new(config.l2);
         Memory {tlb, pt, dc, l2}
     }
+
     pub fn access(&self, raw_trace: trace::RawTrace) -> AccessEvent {
         let addr = raw_trace.addr();
-        unimplemented!()
+
+        if self.pt.cfg.enabled {
+
+        } else {
+
+        }
+        
+        AccessEvent {
+            addr,
+            ..Default::default()
+        }
     }
 }
 
-
-
-
-
 #[derive(Default)]
 pub struct AccessEvent {
-    virtual_addr: u32,
-    virtual_page: u32,
+    addr: u32,
+    virtual_page: Option<u32>,
     page_offset: u32,
-    tlb_tag: u32,
-    tlb_idx: u32,
+    tlb_tag: Option<u32>,
+    tlb_idx: Option<u32>,
     tlb_res: Option<Query>,
     page_table_res: Option<Query>,
     phys_page: u32,
 
     dc_tag: u32,
     dc_idx: u32,
-    dc_res: Option<Query>,
-    l2_tag: u32,
-    l2_idx: u32,
+    dc_res: Query,
+    l2_tag: Option<u32>,
+    l2_idx: Option<u32>,
     l2_res: Option<Query>,
 }
-
 
 impl std::fmt::Display for AccessEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         write!(f, 
-            "{:08x} {:6x} {:4x} {:6x} {:3x} {:4} {:4} {:4x} {:6x} {:3x} {:4} {:6x} {:3x} {:4}",
-            self.virtual_addr,
-            self.virtual_page,
+            //addr  pg # pgoff tbtg tbix tlbr ptrs phypg dctag dcidx dcrs l2tg l2ix l2rs
+            "{:08x} {:6} {:4x} {:6} {:3} {:4} {:4} {:4x} {:6x} {:3x} {:4} {:6} {:3} {:4}",
+            self.addr,
+            self.virtual_page.map_or("".to_string(), |n| format!("{:6x}", n)),
             self.page_offset,
-            self.tlb_tag,
-            self.tlb_idx,
-            if let Some(q) = &self.tlb_res { q.as_str() } else { "" },
-            if let Some(q) = &self.page_table_res { q.as_str() } else { "" },
+            self.tlb_tag.map_or("".to_string(), |n| format!("{:6x}", n)),
+            self.tlb_idx.map_or("".to_string(), |n| format!("{:3x}", n)),
+            self.tlb_res.as_ref().map_or("", |q| q.as_str()),
+            self.page_table_res.as_ref().map_or("", |q| q.as_str()),
             self.phys_page,
             self.dc_tag,
             self.dc_idx,
-            if let Some(q) = &self.dc_res { q.as_str() } else { "" },
-            self.l2_tag,
-            self.l2_idx,
-            if let Some(q) = &self.l2_res { q.as_str() } else { "" },
+            self.dc_res.as_str(),
+            self.l2_tag.map_or("".to_string(), |n| format!("{:6x}", n)),
+            self.l2_idx.map_or("".to_string(), |n| format!("{:3x}", n)),
+            self.l2_res.as_ref().map_or("", |q| q.as_str()),
         )
     }
 }
@@ -84,6 +91,13 @@ enum Query {
 }
 
 impl Query {
+    #[allow(dead_code)]
+    fn to_string(&self) -> String {
+        String::from(match self {
+            Query::Hit => "hit",
+            Query::Miss => "miss",
+        })
+    }
     fn as_str(&self) -> &str {
         match self {
             Query::Hit => "hit",
@@ -91,3 +105,28 @@ impl Query {
         }
     }
 }
+
+// TODO: Remove this
+impl Default for Query {
+    fn default() -> Self {
+        Query::Miss
+    }
+}
+
+/* 
+#[cfg(test)]
+mod test {
+    use super::AccessEvent;
+
+    #[test]
+    fn test_output_string() {
+        let ae = AccessEvent {
+            addr: 0xc83,
+            virtual_page: Some(0xc),
+            page_offset: 0x83,
+            ..Default::default()
+        };
+        println!("{ae}")
+    }
+}
+*/
