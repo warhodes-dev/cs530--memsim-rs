@@ -19,20 +19,24 @@ use crate::{
 
 #[allow(dead_code)]
 const TABLE_HEADER: &str =
-    "Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2\n\
+    "Virtual  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2  \n\
      Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n\
      -------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
 
 fn main() {
     let config_path = "./trace.config";
     let config = match Config::from_file(config_path) {
-        Ok(c) => c,
+        Ok(c) => {
+            println!("{}", c);
+            c
+        },
         Err(e) => {
             eprintln!("Error reading config: {e}");
             return;
         }
     };
-    println!("{}", config);
+
+    let mem = Memory::new(config);
 
     // This is gross on purpose. Returning 'static handles was not
     // added until rustc version 1.61.0. For now, we must instantiate
@@ -52,8 +56,7 @@ fn main() {
     };
     println!("TRACE SUCCESSFULLY LOADED:");
 
-    let mem = Memory::new(config);
-
+    println!("{}", TABLE_HEADER);
     for trace_event in trace_reader {
         println!("")
         /*
