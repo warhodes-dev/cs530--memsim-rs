@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::error::Error;
 
-use crate::utils::{self, error};
+use crate::utils::{error, bit_ops};
 
 const MAX_TLB_SETS: usize = 256;
 const MAX_TLB_ASSOC: usize = 8;
@@ -46,12 +46,27 @@ pub struct CacheConfig {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub enum AddressType {
+    Physical,
+    Virtual,
+}
+
+impl AddressType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Physical => "Physical",
+            Self::Virtual => "Virtual",
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct Config {
     pub tlb: TLBConfig,
     pub pt: PageTableConfig,
     pub dc: CacheConfig,
     pub l2: CacheConfig,
-    pub virtual_addresses: bool,
+    pub address_type: AddressType,
 }
 
 impl Config {
@@ -79,7 +94,7 @@ impl Config {
         let tlb_config = {
             let sets = opts[0].parse::<usize>()?;
             let set_entries = opts[1].parse::<usize>()?;
-            let idx_size   = utils::min_bits(sets as u32) as usize;
+            let idx_size   = bit_ops::min_bits(sets as u32) as usize;
 		    let enabled = opts[14] == "y";
             
             if sets > MAX_TLB_SETS {
@@ -100,8 +115,8 @@ impl Config {
             let virtual_pages = opts[2].parse::<usize>()?;
             let physical_pages = opts[3].parse::<usize>()?;
             let page_size = opts[4].parse::<usize>()?;
-            let idx_size = utils::min_bits(virtual_pages as u32) as usize;
-            let offset_size = utils::min_bits(page_size as u32) as usize;
+            let idx_size = bit_ops::min_bits(virtual_pages as u32) as usize;
+            let offset_size = bit_ops::min_bits(page_size as u32) as usize;
 		    //let enabled = opts[13] == "y";
 
             if virtual_pages > MAX_VIRT_PAGES {
@@ -110,10 +125,10 @@ impl Config {
             if physical_pages > MAX_PHYS_PAGES {
                 error!("The number of physical pages is {} but max is {}.", physical_pages, MAX_VIRT_PAGES);
             }
-            if !utils::is_pow2(virtual_pages as u32) {
+            if !bit_ops::is_pow2(virtual_pages as u32) {
                 error!("# of virtual pages is {} but must be a power of 2", virtual_pages);
             }
-            if !utils::is_pow2(virtual_pages as u32) {
+            if !bit_ops::is_pow2(virtual_pages as u32) {
                 error!("Page size is {} but must be a power of 2", page_size);
             }
 
@@ -130,8 +145,8 @@ impl Config {
             let sets = opts[5].parse::<usize>()?;
             let set_entries = opts[6].parse::<usize>()?;
             let line_size = opts[7].parse::<usize>()?;
-            let idx_size = utils::min_bits(sets as u32) as usize;
-            let offset_size = utils::min_bits(line_size as u32) as usize;
+            let idx_size = bit_ops::min_bits(sets as u32) as usize;
+            let offset_size = bit_ops::min_bits(line_size as u32) as usize;
 		    let walloc_enabled = opts[8] != "y";
 
             if sets > MAX_DC_SETS {
@@ -165,8 +180,8 @@ impl Config {
             let sets = opts[9].parse::<usize>()?;
             let set_entries = opts[10].parse::<usize>()?;
             let line_size = opts[11].parse::<usize>()?;
-            let idx_size = utils::min_bits(sets as u32) as usize;
-            let offset_size = utils::min_bits(line_size as u32) as usize;
+            let idx_size = bit_ops::min_bits(sets as u32) as usize;
+            let offset_size = bit_ops::min_bits(line_size as u32) as usize;
 		    let walloc_enabled = opts[12] != "y";
 		    let enabled = opts[15] == "y";
 
@@ -194,14 +209,18 @@ impl Config {
             }
         };
 
-		let virtual_addresses = opts[13] == "y";
+		let address_type = match opts[13].as_str() {
+            "y" => AddressType::Virtual,
+            "n" => AddressType::Physical,
+            s => error!("Field 13 (virutal addresses enabled) must be 'y' or 'n' but was {}", s),
+        };
 
         Ok(Config{
             tlb: tlb_config, 
             pt: pt_config, 
             dc: dc_config, 
             l2: l2_config,
-            virtual_addresses,
+            address_type,
         })
     }
 }
@@ -239,8 +258,7 @@ impl std::fmt::Display for Config {
         writeln!(f, "Number of bits used for the offset is {}.", self.l2.offset_size)?;
         writeln!(f)?;
 
-        writeln!(f, "The addresses read in are {} addresses.", 
-                if self.virtual_addresses { "virtual" } else { "physical" })?;
+        writeln!(f, "The addresses read in are {} addresses.", self.address_type.as_str().to_lowercase())?;
 
         if !self.tlb.enabled {
             writeln!(f, "TLB is disabled in this configuration.")?;

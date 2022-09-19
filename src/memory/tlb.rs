@@ -1,11 +1,6 @@
 use crate::config;
 
-#[derive(Debug, Copy, Clone)]
-pub struct TlbEntry {
-    tag: u32,
-    // TODO: change this to PhysicalAddr from page.rs
-    phys_addr: u32,
-}
+pub type TlbEntry = (u32, u32);
 
 // "index" refers to the index of the set, not set entries
 #[derive(Debug)]
@@ -15,9 +10,9 @@ pub struct Tlb(
             Option<TlbEntry>>>); // Entry is either valid (Some) or invalid (None)
 
 impl Tlb {
-    pub fn new(config: &config::TLBConfig) -> Self {
-        let empty_set = vec![ None ; config.set_entries ];
-        let tlb_inner = vec![ empty_set ; config.sets ];
+    pub fn new(cfg: &config::TLBConfig) -> Self {
+        let empty_set = vec![ None ; cfg.set_entries ];
+        let tlb_inner = vec![ empty_set ; cfg.sets ];
         Tlb(tlb_inner)
     }
 

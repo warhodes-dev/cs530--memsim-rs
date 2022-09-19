@@ -3,9 +3,9 @@ mod tlb;
 mod cache;
 use crate::{
     trace,
-    config::Config,
+    config::{Config, AddressType},
     utils::{
-        SplitBits,
+        bit_ops::SplitBits,
     },
     memory::{
         page::PageTable, 
@@ -35,30 +35,31 @@ impl Memory {
         let raw_addr = raw_trace.addr();
 
         // This will hold important parameters for return
-        let mut event = AccessEvent::default();
+        // let mut event = AccessEvent::default();
 
-        let (physical_page_num, page_offset) = if self.config.virtual_addresses {
-            let (vpn, offset) = raw_addr.split_bits(self.config.pt.offset_size);
-            let ppn = self.tlb.lookup(vpn)
-            (ppn, offset)
-        } else {
-            let (ppn, offset) = raw_addr.split_bits(self.config.pt.offset_size);
-            (ppn, offset)
+        let (physical_page_num, page_offset) = match self.config.address_type {
+            AddressType::Virtual => {
+                let (vpn, offset) = raw_addr.split_bits(self.config.pt.offset_size);
+                let (_tag, ppn) = self.tlb.lookup(vpn as usize);
+                (ppn, offset)
+            },
+            AddressType::Physical => {
+                let (ppn, offset) = raw_addr.split_bits(self.config.pt.offset_size);
+                (ppn, offset)
+            },
         };
 
+        let (dc_block_addr, dc_block_offset) = raw_addr.split_bits(self.config.dc.offset_size);
+        let (dc_tag, dc_idx) = dc_block_addr.split_bits(self.config.dc.idx_size);
 
-        
-
-        /*
-        if self.config.virtual_addresses {
-            todo!()
-        } else {
-            event.addr = raw_addr; // Physical Address
-            let (phys_page, page_offset) = utils::split_bits()
-            // Perform DC
-        }
-        */
-        
+        let event = AccessEvent {
+            addr: raw_addr,
+            page_offset,
+            physical_page_num,
+            dc_idx,
+            dc_tag,
+            ..Default::default()
+        };
 
         if event.is_valid(&self.config) {
             event
@@ -90,7 +91,8 @@ pub struct AccessEvent {
 
 impl AccessEvent { 
     fn is_valid(&self, config: &Config) -> bool {
-        todo!()
+        // TODO: make this into actuality
+        true
     }
 }
 
@@ -130,7 +132,7 @@ impl Query {
             Query::Miss => "miss",
         })
     }
-    fn as_str(&self) -> &str {
+    fn as_str(&self) -> &'static str {
         match self {
             Query::Hit => "hit",
             Query::Miss => "miss",
