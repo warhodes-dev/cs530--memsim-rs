@@ -17,7 +17,7 @@ const MIN_L2_LINE_SIZE: usize = MIN_DC_LINE_SIZE;
 const MAX_REF_ADDR_LEN: u32 = 32;
 
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct TLBConfig {
     pub sets: usize,
     pub set_entries: usize,
@@ -25,17 +25,16 @@ pub struct TLBConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct PageTableConfig {
     pub virtual_pages: usize,
     pub physical_pages: usize,
     pub page_size: usize,
     pub idx_size: usize,
     pub offset_size: usize,
-    pub enabled: bool,
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct CacheConfig {
     pub sets: usize,
     pub set_entries: usize,
@@ -46,12 +45,13 @@ pub struct CacheConfig {
     pub enabled: bool,
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Config {
     pub tlb: TLBConfig,
     pub pt: PageTableConfig,
     pub dc: CacheConfig,
     pub l2: CacheConfig,
+    pub virtual_addresses: bool,
 }
 
 impl Config {
@@ -102,7 +102,7 @@ impl Config {
             let page_size = opts[4].parse::<usize>()?;
             let idx_size = utils::min_bits(virtual_pages as u32) as usize;
             let offset_size = utils::min_bits(page_size as u32) as usize;
-		    let enabled = opts[13] == "y";
+		    //let enabled = opts[13] == "y";
 
             if virtual_pages > MAX_VIRT_PAGES {
                 error!("The number of virtual pages is {} but max is {}.", virtual_pages, MAX_VIRT_PAGES);
@@ -123,7 +123,6 @@ impl Config {
                 page_size,
                 idx_size,
                 offset_size,
-                enabled,
             }
         };
 
@@ -195,11 +194,14 @@ impl Config {
             }
         };
 
+		let virtual_addresses = opts[13] == "y";
+
         Ok(Config{
             tlb: tlb_config, 
             pt: pt_config, 
             dc: dc_config, 
             l2: l2_config,
+            virtual_addresses,
         })
     }
 }
@@ -238,7 +240,7 @@ impl std::fmt::Display for Config {
         writeln!(f)?;
 
         writeln!(f, "The addresses read in are {} addresses.", 
-                if self.pt.enabled { "virtual" } else { "physical" })?;
+                if self.virtual_addresses { "virtual" } else { "physical" })?;
 
         if !self.tlb.enabled {
             writeln!(f, "TLB is disabled in this configuration.")?;

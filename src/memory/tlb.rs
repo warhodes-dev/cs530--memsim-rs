@@ -15,7 +15,7 @@ pub struct Tlb(
             Option<TlbEntry>>>); // Entry is either valid (Some) or invalid (None)
 
 impl Tlb {
-    pub fn new(config: config::TLBConfig) -> Self {
+    pub fn new(config: &config::TLBConfig) -> Self {
         let empty_set = vec![ None ; config.set_entries ];
         let tlb_inner = vec![ empty_set ; config.sets ];
         Tlb(tlb_inner)

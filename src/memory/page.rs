@@ -1,18 +1,21 @@
 use crate::config;
 
 pub struct PageTable {
-    pub cfg: config::PageTableConfig
 }
 
 impl PageTable {
-    pub fn new(cfg: config::PageTableConfig) -> Self {
+    pub fn new(cfg: &config::PageTableConfig) -> Self {
         PageTable {
-            cfg,
         }
     }
 }
 
 struct VirtualAddr {
+    page_num: u32,
+    page_offset: u32,
+}
+
+struct PhysicalAddr {
     page_num: u32,
     page_offset: u32,
 }

@@ -20,8 +20,6 @@ impl RawTrace {
 pub struct TraceReader;
 
 impl TraceReader {
-    // TODO: Make this take a `config` item. Use the config to determine which
-    //       bits need to be translate into fields of the Trace struct.
     pub fn from_stdin(stdin_lock: io::StdinLock) -> Result<impl Iterator<Item = RawTrace> + '_, Box<dyn Error>> {
         let lines = stdin_lock.lines()
             .filter_map(|line| line.ok())
