@@ -28,6 +28,7 @@ fn main() {
             return;
         }
     };
+    let addr_type = config.address_type;
 
     let mut mem = Memory::new(config);
 
@@ -40,7 +41,7 @@ fn main() {
     let trace_reader = TraceReader::from_stdin(stdin_lock).expect("Error reading from stdin");
     println!("TRACE SUCCESSFULLY LOADED:");
 
-    println!("{} {}", mem.config.address_type.as_str(), TABLE_HEADER);
+    println!("{} {}", addr_type.as_str(), TABLE_HEADER);
     for trace_event in trace_reader {
         let access_result = mem.access(trace_event);
         println!("{}", access_result);
