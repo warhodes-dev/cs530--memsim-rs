@@ -164,7 +164,7 @@ impl Config {
             let line_size = opts[7].parse::<usize>()?;
             let idx_size = bits::min_repr(sets as u32) as usize;
             let offset_size = bits::min_repr(line_size as u32) as usize;
-		    let walloc_enabled = opts[8] != "y";
+		    let walloc_enabled = !parse_yn!(opts, 8); 
 
             if sets > MAX_DC_SETS {
                 error!("{} DC sets specified but max is {}", sets, MAX_DC_SETS);
@@ -199,7 +199,7 @@ impl Config {
             let line_size = opts[11].parse::<usize>()?;
             let idx_size = bits::min_repr(sets as u32) as usize;
             let offset_size = bits::min_repr(line_size as u32) as usize;
-		    let walloc_enabled = parse_yn!(opts, 12);
+		    let walloc_enabled = !parse_yn!(opts, 12);
             let enabled = parse_yn!(opts, 15);
 
             if set_entries > MAX_L2_ASSOC {
@@ -282,7 +282,7 @@ impl std::fmt::Display for Config {
         }
 
         if !self.l2.enabled {
-            writeln!(f, "L2 cache is disabled in this configuration")?;
+            writeln!(f, "L2 cache is disabled in this configuration.")?;
         }
         Ok(())
     }

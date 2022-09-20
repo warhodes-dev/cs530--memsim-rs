@@ -17,7 +17,6 @@ pub struct Cache {
             Vec< // Block
                 Option<u32>>>, // Entry is either valid (Some) or invalid (None)
     config: config::CacheConfig,
-    
 }
 
 impl Cache {

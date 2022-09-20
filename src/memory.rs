@@ -30,11 +30,19 @@ impl Memory {
         Memory {tlb, pt, dc, l2, address_type}
     }
 
-    pub fn access(&mut self, raw_trace: trace::RawTrace) -> AccessEvent {
+    pub fn access(&mut self, raw_trace: trace::RawTrace) -> Result<AccessEvent, Box<dyn std::error::Error>> {
         let raw_addr = raw_trace.addr();
 
-        // This will hold important parameters for return
-        // let mut event = AccessEvent::default();
+        // Make sure addr is a reasonable size
+        match self.address_type {
+            AddressType::Virtual => {
+
+            },
+            AddressType::Physical => {
+
+            }
+        }
+
 
         let (physical_page_num, page_offset) = match self.address_type {
             AddressType::Virtual => {
@@ -48,9 +56,6 @@ impl Memory {
             },
         };
 
-        //let (dc_block_addr, dc_block_offset) = bits::split_at(raw_addr, self.config.dc.offset_size);
-        //let (dc_tag, dc_idx) = bits::split_at(dc_block_addr, self.config.dc.idx_size);
-
         let dc_response = self.dc.lookup(raw_addr);
 
         let event = AccessEvent {
@@ -63,7 +68,7 @@ impl Memory {
             ..Default::default()
         };
 
-        event
+        Ok(event)
     }
 }
 

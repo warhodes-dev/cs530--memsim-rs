@@ -39,11 +39,13 @@ fn main() {
     let stdin = std::io::stdin();
     let stdin_lock = stdin.lock();
     let trace_reader = TraceReader::from_stdin(stdin_lock).expect("Error reading from stdin");
-    println!("TRACE SUCCESSFULLY LOADED:");
 
     println!("{} {}", addr_type.as_str(), TABLE_HEADER);
     for trace_event in trace_reader {
         let access_result = mem.access(trace_event);
-        println!("{}", access_result);
+        match access_result {
+            Ok(access) => println!("{}", access),
+            Err(e) => eprintln!("Invalid access: {}", e),
+        }
     }
 }
