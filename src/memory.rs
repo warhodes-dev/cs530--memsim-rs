@@ -4,11 +4,9 @@ mod cache;
 use crate::{
     trace,
     config::{Config, AddressType},
-    utils::{
-        bit_ops::SplitBits,
-    },
+    utils::{self, bits},
     memory::{
-        page::PageTable, 
+        page::{PageTable, PhysicalAddr, VirtualAddr},
         cache::Cache, 
         tlb::Tlb,
     }
@@ -19,16 +17,17 @@ pub struct Memory {
     pt: PageTable,
     dc: Cache,
     l2: Cache,
-    pub config: Config,
+    address_type: AddressType,
 }
 
 impl Memory {
     pub fn new(config: Config) -> Self {
         let tlb = Tlb::new(&config.tlb);
-        let pt = PageTable::new(&config.pt);
-        let dc = Cache::new(&config.dc);
-        let l2 = Cache::new(&config.l2);
-        Memory {tlb, pt, dc, l2, config}
+        let pt = PageTable::new(config.pt);
+        let dc = Cache::new(config.dc);
+        let l2 = Cache::new(config.l2);
+        let address_type = config.address_type;
+        Memory {tlb, pt, dc, l2, address_type}
     }
 
     pub fn access(&mut self, raw_trace: trace::RawTrace) -> AccessEvent {
@@ -37,35 +36,34 @@ impl Memory {
         // This will hold important parameters for return
         // let mut event = AccessEvent::default();
 
-        let (physical_page_num, page_offset) = match self.config.address_type {
+        let (physical_page_num, page_offset) = match self.address_type {
             AddressType::Virtual => {
-                let (vpn, offset) = raw_addr.split_bits(self.config.pt.offset_size);
-                let (_tag, ppn) = self.tlb.lookup(vpn as usize);
-                (ppn, offset)
+                //let (vpn, offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
+                //let (_tag, ppn) = self.tlb.lookup(vpn as usize);
+                unimplemented!()
             },
             AddressType::Physical => {
-                let (ppn, offset) = raw_addr.split_bits(self.config.pt.offset_size);
-                (ppn, offset)
+                let phys_addr = self.pt.passthrough(raw_addr);
+                (phys_addr.page_num, phys_addr.page_offset)
             },
         };
 
-        let (dc_block_addr, dc_block_offset) = raw_addr.split_bits(self.config.dc.offset_size);
-        let (dc_tag, dc_idx) = dc_block_addr.split_bits(self.config.dc.idx_size);
+        //let (dc_block_addr, dc_block_offset) = bits::split_at(raw_addr, self.config.dc.offset_size);
+        //let (dc_tag, dc_idx) = bits::split_at(dc_block_addr, self.config.dc.idx_size);
+
+        let dc_response = self.dc.lookup(raw_addr);
 
         let event = AccessEvent {
             addr: raw_addr,
             page_offset,
             physical_page_num,
-            dc_idx,
-            dc_tag,
+            dc_tag: dc_response.tag,
+            dc_idx: dc_response.idx,
+            dc_res: Some(dc_response.result),
             ..Default::default()
         };
 
-        if event.is_valid(&self.config) {
-            event
-        } else {
-            panic!("invalid access event");
-        }
+        event
     }
 }
 
@@ -119,7 +117,8 @@ impl std::fmt::Display for AccessEvent {
     }
 }
 
-enum Query {
+#[derive(PartialEq, Eq)]
+pub enum Query {
     Hit,
     Miss,
 }

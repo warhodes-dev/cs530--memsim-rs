@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::{prelude::*, BufReader};
 use std::error::Error;
 
-use crate::utils::{error, bit_ops};
+use crate::utils::bits;
 
 const MAX_TLB_SETS: usize = 256;
 const MAX_TLB_ASSOC: usize = 8;
@@ -16,6 +16,21 @@ const MIN_L2_LINE_SIZE: usize = MIN_DC_LINE_SIZE;
 #[allow(dead_code)]
 const MAX_REF_ADDR_LEN: u32 = 32;
 
+macro_rules! error {
+    ($($args:tt)*) => {{
+        return Err(format!($($args)*).into());
+    }}
+}
+
+macro_rules! parse_yn {
+    ($opts:ident, $idx:literal) => {{
+		match $opts[$idx].as_str() {
+            "y" => true,
+            "n" => false,
+            s => error!("Field {} must be 'y' or 'n' but was {}", $idx, s),
+        }
+    }}
+}
 
 #[derive(Copy, Clone, Debug)]
 pub struct TLBConfig {
@@ -32,6 +47,7 @@ pub struct PageTableConfig {
     pub page_size: usize,
     pub idx_size: usize,
     pub offset_size: usize,
+    pub enabled: bool, // disabled if input is physical addresses
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -94,7 +110,7 @@ impl Config {
         let tlb_config = {
             let sets = opts[0].parse::<usize>()?;
             let set_entries = opts[1].parse::<usize>()?;
-            let idx_size   = bit_ops::min_bits(sets as u32) as usize;
+            let idx_size   = bits::min_repr(sets as u32) as usize;
 		    let enabled = opts[14] == "y";
             
             if sets > MAX_TLB_SETS {
@@ -115,9 +131,9 @@ impl Config {
             let virtual_pages = opts[2].parse::<usize>()?;
             let physical_pages = opts[3].parse::<usize>()?;
             let page_size = opts[4].parse::<usize>()?;
-            let idx_size = bit_ops::min_bits(virtual_pages as u32) as usize;
-            let offset_size = bit_ops::min_bits(page_size as u32) as usize;
-		    //let enabled = opts[13] == "y";
+            let idx_size = bits::min_repr(virtual_pages as u32) as usize;
+            let offset_size = bits::min_repr(page_size as u32) as usize;
+            let enabled = parse_yn!(opts, 13);
 
             if virtual_pages > MAX_VIRT_PAGES {
                 error!("The number of virtual pages is {} but max is {}.", virtual_pages, MAX_VIRT_PAGES);
@@ -125,10 +141,10 @@ impl Config {
             if physical_pages > MAX_PHYS_PAGES {
                 error!("The number of physical pages is {} but max is {}.", physical_pages, MAX_VIRT_PAGES);
             }
-            if !bit_ops::is_pow2(virtual_pages as u32) {
+            if !bits::is_pow2(virtual_pages as u32) {
                 error!("# of virtual pages is {} but must be a power of 2", virtual_pages);
             }
-            if !bit_ops::is_pow2(virtual_pages as u32) {
+            if !bits::is_pow2(virtual_pages as u32) {
                 error!("Page size is {} but must be a power of 2", page_size);
             }
 
@@ -138,6 +154,7 @@ impl Config {
                 page_size,
                 idx_size,
                 offset_size,
+                enabled, 
             }
         };
 
@@ -145,8 +162,8 @@ impl Config {
             let sets = opts[5].parse::<usize>()?;
             let set_entries = opts[6].parse::<usize>()?;
             let line_size = opts[7].parse::<usize>()?;
-            let idx_size = bit_ops::min_bits(sets as u32) as usize;
-            let offset_size = bit_ops::min_bits(line_size as u32) as usize;
+            let idx_size = bits::min_repr(sets as u32) as usize;
+            let offset_size = bits::min_repr(line_size as u32) as usize;
 		    let walloc_enabled = opts[8] != "y";
 
             if sets > MAX_DC_SETS {
@@ -180,10 +197,10 @@ impl Config {
             let sets = opts[9].parse::<usize>()?;
             let set_entries = opts[10].parse::<usize>()?;
             let line_size = opts[11].parse::<usize>()?;
-            let idx_size = bit_ops::min_bits(sets as u32) as usize;
-            let offset_size = bit_ops::min_bits(line_size as u32) as usize;
-		    let walloc_enabled = opts[12] != "y";
-		    let enabled = opts[15] == "y";
+            let idx_size = bits::min_repr(sets as u32) as usize;
+            let offset_size = bits::min_repr(line_size as u32) as usize;
+		    let walloc_enabled = parse_yn!(opts, 12);
+            let enabled = parse_yn!(opts, 15);
 
             if set_entries > MAX_L2_ASSOC {
                 error!("L2 cache has associativity of {} but max is {}", set_entries, MAX_L2_ASSOC);
@@ -271,15 +288,3 @@ impl std::fmt::Display for Config {
     }
 }
 
-
-
-
-
-
-
-
-
-
-
-
-//

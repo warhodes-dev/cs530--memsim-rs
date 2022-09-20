@@ -16,7 +16,7 @@ impl Tlb {
         Tlb(tlb_inner)
     }
 
-    pub fn lookup(&self, i: usize) -> TlbEntry {
+    pub fn lookup(&self, tag: u32, idx: usize) -> TlbEntry {
         unimplemented!()
     }
 }
