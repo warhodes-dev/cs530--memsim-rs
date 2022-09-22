@@ -3,7 +3,7 @@ mod tlb;
 mod cache;
 use crate::{
     trace,
-    config::{Config, AddressType},
+    config::{Config, AddressType, MemoryConfig},
     utils::{self, bits},
     memory::{
         page::{PageTable, PhysicalAddr, VirtualAddr},
@@ -17,7 +17,7 @@ pub struct Memory {
     pt: PageTable,
     dc: Cache,
     l2: Cache,
-    address_type: AddressType,
+    config: MemoryConfig,
 }
 
 impl Memory {
@@ -26,25 +26,30 @@ impl Memory {
         let pt = PageTable::new(config.pt);
         let dc = Cache::new(config.dc);
         let l2 = Cache::new(config.l2);
-        let address_type = config.address_type;
-        Memory {tlb, pt, dc, l2, address_type}
+        let config = config.mem;
+        Memory {tlb, pt, dc, l2, config}
     }
 
     pub fn access(&mut self, raw_trace: trace::RawTrace) -> Result<AccessEvent, Box<dyn std::error::Error>> {
         let raw_addr = raw_trace.addr();
 
         // Make sure addr is a reasonable size
-        match self.address_type {
+        match self.config.address_type {
             AddressType::Virtual => {
-                
+                if raw_addr > self.config.max_virtual_addr {
+                    return Err(format!("virtual address {:08x} is too large (maximum size is 0x{:x})",
+                        raw_addr, self.config.max_virtual_addr - 1).into());
+                }
             },
             AddressType::Physical => {
-
+                if raw_addr > self.config.max_physical_addr {
+                    return Err(format!("physical address {:08x} is too large (maximum size is 0x{:x})",
+                        raw_addr, self.config.max_physical_addr - 1).into());
+                }
             }
         }
 
-
-        let (physical_page_num, page_offset) = match self.address_type {
+        let (physical_page_num, page_offset) = match self.config.address_type {
             AddressType::Virtual => {
                 //let (vpn, offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
                 //let (_tag, ppn) = self.tlb.lookup(vpn as usize);

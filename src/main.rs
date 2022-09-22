@@ -28,7 +28,7 @@ fn main() {
             return;
         }
     };
-    let addr_type = config.address_type;
+    let addr_type = config.mem.address_type;
 
     let mut mem = Memory::new(config);
 
@@ -45,7 +45,10 @@ fn main() {
         let access_result = mem.access(trace_event);
         match access_result {
             Ok(access) => println!("{}", access),
-            Err(e) => eprintln!("Invalid access: {}", e),
+            Err(e) => {
+                eprintln!("Invalid access: {}", e);
+                return;
+            }
         }
     }
 }

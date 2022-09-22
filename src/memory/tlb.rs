@@ -11,8 +11,8 @@ pub struct Tlb(
 
 impl Tlb {
     pub fn new(cfg: &config::TLBConfig) -> Self {
-        let empty_set = vec![ None ; cfg.set_entries ];
-        let tlb_inner = vec![ empty_set ; cfg.sets ];
+        let empty_set = vec![ None ; cfg.set_entries as usize ];
+        let tlb_inner = vec![ empty_set ; cfg.sets as usize ];
         Tlb(tlb_inner)
     }
 

@@ -16,7 +16,7 @@ pub mod bits {
     }
 
     /// Splits a u32 into two u32s at the bit index
-    pub fn split_at(x: u32, n: usize) -> (u32, u32) {
+    pub fn split_at(x: u32, n: u32) -> (u32, u32) {
         let mask = (1 << n) - 1;
         let right = x & mask;
         let left = ( x &! mask) >> n;

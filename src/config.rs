@@ -4,15 +4,15 @@ use std::error::Error;
 
 use crate::utils::bits;
 
-const MAX_TLB_SETS: usize = 256;
-const MAX_TLB_ASSOC: usize = 8;
-const MAX_VIRT_PAGES: usize = 8192;
-const MAX_PHYS_PAGES: usize = 1024;
-const MAX_DC_SETS: usize = 8192;
-const MAX_DC_ASSOC: usize = 8;
-const MIN_DC_LINE_SIZE: usize = 8;
-const MAX_L2_ASSOC: usize = 8;
-const MIN_L2_LINE_SIZE: usize = MIN_DC_LINE_SIZE;
+const MAX_TLB_SETS: u32 = 256;
+const MAX_TLB_ASSOC: u32 = 8;
+const MAX_VIRT_PAGES: u32 = 8192;
+const MAX_PHYS_PAGES: u32 = 1024;
+const MAX_DC_SETS: u32 = 8192;
+const MAX_DC_ASSOC: u32 = 8;
+const MIN_DC_LINE_SIZE: u32 = 8;
+const MAX_L2_ASSOC: u32 = 8;
+const MIN_L2_LINE_SIZE: u32 = MIN_DC_LINE_SIZE;
 #[allow(dead_code)]
 const MAX_REF_ADDR_LEN: u32 = 32;
 
@@ -34,31 +34,38 @@ macro_rules! parse_yn {
 
 #[derive(Copy, Clone, Debug)]
 pub struct TLBConfig {
-    pub sets: usize,
-    pub set_entries: usize,
-    pub idx_size: usize,
+    pub sets: u32,
+    pub set_entries: u32,
+    pub idx_size: u32,
     pub enabled: bool,
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct PageTableConfig {
-    pub virtual_pages: usize,
-    pub physical_pages: usize,
-    pub page_size: usize,
-    pub idx_size: usize,
-    pub offset_size: usize,
+    pub virtual_pages: u32,
+    pub physical_pages: u32,
+    pub page_size: u32,
+    pub idx_size: u32,
+    pub offset_size: u32,
     pub enabled: bool, // disabled if input is physical addresses
 }
 
 #[derive(Copy, Clone, Debug)]
 pub struct CacheConfig {
-    pub sets: usize,
-    pub set_entries: usize,
-    pub line_size: usize,
-    pub idx_size: usize,
-    pub offset_size: usize,
+    pub sets: u32,
+    pub set_entries: u32,
+    pub line_size: u32,
+    pub idx_size: u32,
+    pub offset_size: u32,
     pub walloc_enabled: bool,
     pub enabled: bool,
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct MemoryConfig {
+    pub address_type: AddressType,
+    pub max_physical_addr: u32,
+    pub max_virtual_addr: u32,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -82,7 +89,7 @@ pub struct Config {
     pub pt: PageTableConfig,
     pub dc: CacheConfig,
     pub l2: CacheConfig,
-    pub address_type: AddressType,
+    pub mem: MemoryConfig
 }
 
 impl Config {
@@ -108,9 +115,9 @@ impl Config {
         }
 
         let tlb_config = {
-            let sets = opts[0].parse::<usize>()?;
-            let set_entries = opts[1].parse::<usize>()?;
-            let idx_size   = bits::min_repr(sets as u32) as usize;
+            let sets = opts[0].parse::<u32>()?;
+            let set_entries = opts[1].parse::<u32>()?;
+            let idx_size   = bits::min_repr(sets as u32) as u32;
 		    let enabled = opts[14] == "y";
             
             if sets > MAX_TLB_SETS {
@@ -128,11 +135,11 @@ impl Config {
 
 
         let pt_config = {
-            let virtual_pages = opts[2].parse::<usize>()?;
-            let physical_pages = opts[3].parse::<usize>()?;
-            let page_size = opts[4].parse::<usize>()?;
-            let idx_size = bits::min_repr(virtual_pages as u32) as usize;
-            let offset_size = bits::min_repr(page_size as u32) as usize;
+            let virtual_pages = opts[2].parse::<u32>()?;
+            let physical_pages = opts[3].parse::<u32>()?;
+            let page_size = opts[4].parse::<u32>()?;
+            let idx_size = bits::min_repr(virtual_pages as u32) as u32;
+            let offset_size = bits::min_repr(page_size as u32) as u32;
             let enabled = parse_yn!(opts, 13);
 
             if virtual_pages > MAX_VIRT_PAGES {
@@ -159,11 +166,11 @@ impl Config {
         };
 
         let dc_config = {
-            let sets = opts[5].parse::<usize>()?;
-            let set_entries = opts[6].parse::<usize>()?;
-            let line_size = opts[7].parse::<usize>()?;
-            let idx_size = bits::min_repr(sets as u32) as usize;
-            let offset_size = bits::min_repr(line_size as u32) as usize;
+            let sets = opts[5].parse::<u32>()?;
+            let set_entries = opts[6].parse::<u32>()?;
+            let line_size = opts[7].parse::<u32>()?;
+            let idx_size = bits::min_repr(sets as u32) as u32;
+            let offset_size = bits::min_repr(line_size as u32) as u32;
 		    let walloc_enabled = !parse_yn!(opts, 8); 
 
             if sets > MAX_DC_SETS {
@@ -194,11 +201,11 @@ impl Config {
         };
 
         let l2_config = {
-            let sets = opts[9].parse::<usize>()?;
-            let set_entries = opts[10].parse::<usize>()?;
-            let line_size = opts[11].parse::<usize>()?;
-            let idx_size = bits::min_repr(sets as u32) as usize;
-            let offset_size = bits::min_repr(line_size as u32) as usize;
+            let sets = opts[9].parse::<u32>()?;
+            let set_entries = opts[10].parse::<u32>()?;
+            let line_size = opts[11].parse::<u32>()?;
+            let idx_size = bits::min_repr(sets as u32) as u32;
+            let offset_size = bits::min_repr(line_size as u32) as u32;
 		    let walloc_enabled = !parse_yn!(opts, 12);
             let enabled = parse_yn!(opts, 15);
 
@@ -226,10 +233,21 @@ impl Config {
             }
         };
 
-		let address_type = match opts[13].as_str() {
-            "y" => AddressType::Virtual,
-            "n" => AddressType::Physical,
-            s => error!("Field 13 (virutal addresses enabled) must be 'y' or 'n' but was {}", s),
+
+        let mem_config = {
+            let address_type = match opts[13].as_str() {
+                "y" => AddressType::Virtual,
+                "n" => AddressType::Physical,
+                s => error!("Field 13 (virutal addresses enabled) must be 'y' or 'n' but was {}", s),
+            };
+            let max_physical_addr = pt_config.physical_pages * pt_config.page_size;
+            let max_virtual_addr = pt_config.virtual_pages * pt_config.page_size;
+
+            MemoryConfig {
+                address_type,
+                max_physical_addr,
+                max_virtual_addr,
+            }
         };
 
         Ok(Config{
@@ -237,7 +255,7 @@ impl Config {
             pt: pt_config, 
             dc: dc_config, 
             l2: l2_config,
-            address_type,
+            mem: mem_config,
         })
     }
 }
@@ -275,7 +293,7 @@ impl std::fmt::Display for Config {
         writeln!(f, "Number of bits used for the offset is {}.", self.l2.offset_size)?;
         writeln!(f)?;
 
-        writeln!(f, "The addresses read in are {} addresses.", self.address_type.as_str().to_lowercase())?;
+        writeln!(f, "The addresses read in are {} addresses.", self.mem.address_type.as_str().to_lowercase())?;
 
         if !self.tlb.enabled {
             writeln!(f, "TLB is disabled in this configuration.")?;

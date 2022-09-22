@@ -7,11 +7,6 @@ pub struct CacheResponse {
     pub result: Query,
 }
 
-pub struct CacheEntry {
-    tag: u32,
-    age: u32,
-}
-
 pub struct Cache {
     data: Vec< // Set
             Vec< // Block
@@ -21,10 +16,10 @@ pub struct Cache {
 
 impl Cache {
     pub fn new(config: config::CacheConfig) -> Self {
-        let empty_set = vec![ None ; config.set_entries ];
-        let cache_inner = vec![ empty_set ; config.sets ];
+        let empty_set = vec![ None ; config.set_entries as usize ];
+        let sets = vec![ empty_set ; config.sets as usize ];
         Cache { 
-            data: cache_inner,
+            data: sets,
             config,
         }
     }
@@ -34,20 +29,16 @@ impl Cache {
         let (tag, idx) = bits::split_at(block_addr, self.config.idx_size);
 
         let set = &mut self.data[idx as usize];
-        
 
         let searched_block = set.iter()
-            .find(|&&block| block == Some(tag));
+            .find(|&&block| block == Some(tag))
+            .copied()
+            .flatten();
 
-        let query_result = match searched_block {
-            Some(valid_block) => {
-                if valid_block.is_some() {
-                    Query::Hit
-                } else {
-                    Query::Miss
-                }
-            },
-            None => Query::Miss,
+        let query_result = if searched_block.is_some() {
+            Query::Hit
+        } else {
+            Query::Miss
         };
 
         // TODO: This only supports 1-way associativity
@@ -60,5 +51,22 @@ impl Cache {
             idx,
             result: query_result,
         }
+    }
+}
+
+pub struct CacheEntry {
+    tag: u32,
+    age: u32,
+    valid: bool,
+}
+
+struct Set {
+    entries: Vec<CacheEntry>,
+    size: usize,
+}
+
+impl Set {
+    fn insert(item: u32) {
+
     }
 }
