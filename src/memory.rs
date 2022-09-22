@@ -36,7 +36,7 @@ impl Memory {
         // Make sure addr is a reasonable size
         match self.address_type {
             AddressType::Virtual => {
-
+                
             },
             AddressType::Physical => {
 
