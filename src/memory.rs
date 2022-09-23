@@ -1,6 +1,7 @@
 mod page;
 mod tlb;
 mod cache;
+mod lru;
 use crate::{
     trace,
     config::{Config, AddressType, MemoryConfig},

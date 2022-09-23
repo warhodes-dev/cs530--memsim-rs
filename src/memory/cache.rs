@@ -1,5 +1,6 @@
+use std::collections::VecDeque;
 use crate::{config, utils::bits};
-use super::Query;
+use super::{Query, lru::Set};
 
 pub struct CacheResponse {
     pub tag: u32,
@@ -8,15 +9,13 @@ pub struct CacheResponse {
 }
 
 pub struct Cache {
-    data: Vec< // Set
-            Vec< // Block
-                Option<u32>>>, // Entry is either valid (Some) or invalid (None)
+    data: Vec<Set<u32>>,
     config: config::CacheConfig,
 }
 
 impl Cache {
     pub fn new(config: config::CacheConfig) -> Self {
-        let empty_set = vec![ None ; config.set_entries as usize ];
+        let empty_set = Set::new(config.set_entries as usize);
         let sets = vec![ empty_set ; config.sets as usize ];
         Cache { 
             data: sets,
@@ -30,43 +29,19 @@ impl Cache {
 
         let set = &mut self.data[idx as usize];
 
-        let searched_block = set.iter()
-            .find(|&&block| block == Some(tag))
-            .copied()
-            .flatten();
+        let block = set.lookup(tag);
 
-        let query_result = if searched_block.is_some() {
+        let query_result = if block.is_some() {
             Query::Hit
         } else {
+            set.push(tag);
             Query::Miss
         };
-
-        // TODO: This only supports 1-way associativity
-        if query_result == Query::Miss {
-            set[0] = Some(tag);
-        }
 
         CacheResponse {
             tag,
             idx,
             result: query_result,
         }
-    }
-}
-
-pub struct CacheEntry {
-    tag: u32,
-    age: u32,
-    valid: bool,
-}
-
-struct Set {
-    entries: Vec<CacheEntry>,
-    size: usize,
-}
-
-impl Set {
-    fn insert(item: u32) {
-
     }
 }
