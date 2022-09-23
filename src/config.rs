@@ -58,6 +58,7 @@ pub struct CacheConfig {
     pub idx_size: u32,
     pub offset_size: u32,
     pub walloc_enabled: bool,
+    pub wback_enabled: bool,
     pub enabled: bool,
 }
 
@@ -146,7 +147,7 @@ impl Config {
                 error!("The number of virtual pages is {} but max is {}.", virtual_pages, MAX_VIRT_PAGES);
             }
             if physical_pages > MAX_PHYS_PAGES {
-                error!("The number of physical pages is {} but max is {}.", physical_pages, MAX_VIRT_PAGES);
+                error!("The number of physical pages is {} but max is {}.", physical_pages, MAX_PHYS_PAGES);
             }
             if !bits::is_pow2(virtual_pages as u32) {
                 error!("# of virtual pages is {} but must be a power of 2", virtual_pages);
@@ -172,6 +173,8 @@ impl Config {
             let idx_size = bits::min_repr(sets as u32) as u32;
             let offset_size = bits::min_repr(line_size as u32) as u32;
 		    let walloc_enabled = !parse_yn!(opts, 8); 
+            // write-back is always with write-allocate
+            let wback_enabled = walloc_enabled; 
 
             if sets > MAX_DC_SETS {
                 error!("{} DC sets specified but max is {}", sets, MAX_DC_SETS);
@@ -196,6 +199,7 @@ impl Config {
                 idx_size,
                 offset_size,
                 walloc_enabled,
+                wback_enabled,
                 enabled: true,
             }
         };
@@ -207,6 +211,9 @@ impl Config {
             let idx_size = bits::min_repr(sets as u32) as u32;
             let offset_size = bits::min_repr(line_size as u32) as u32;
 		    let walloc_enabled = !parse_yn!(opts, 12);
+            // write-back is always with write-allocate
+            let wback_enabled = walloc_enabled; 
+
             let enabled = parse_yn!(opts, 15);
 
             if set_entries > MAX_L2_ASSOC {
@@ -229,6 +236,7 @@ impl Config {
                 idx_size,
                 offset_size,
                 walloc_enabled,
+                wback_enabled,
                 enabled,
             }
         };
@@ -278,8 +286,9 @@ impl std::fmt::Display for Config {
         writeln!(f, "D-cache contains {} sets.", self.dc.sets)?;
         writeln!(f, "Each set contains {} entries.", self.dc.set_entries)?;
         writeln!(f, "Each line is {} bytes.", self.dc.line_size)?;
-        writeln!(f, "The cache {} a write-allocate and write-back policy.", 
-                if self.dc.walloc_enabled { "uses" } else { "does not use" })?;
+        writeln!(f, "The cache uses a {}-allocate and write-{} policy.", 
+                if self.dc.walloc_enabled { "write" } else { "no write" },
+                if self.dc.walloc_enabled { "back" } else { "through" })?;
         writeln!(f, "Number of bits used for the index is {}.", self.dc.idx_size)?;
         writeln!(f, "Number of bits used for the offset is {}.", self.dc.offset_size)?;
         writeln!(f)?;
@@ -287,8 +296,9 @@ impl std::fmt::Display for Config {
         writeln!(f, "L2-cache contains {} sets.", self.l2.sets)?;
         writeln!(f, "Each set contains {} entries.", self.l2.set_entries)?;
         writeln!(f, "Each line is {} bytes.", self.l2.line_size)?;
-        writeln!(f, "The cache {} a write-allocate and write-back policy.", 
-                if self.l2.walloc_enabled { "uses" } else { "does not use" })?;
+        writeln!(f, "The cache uses a {}-allocate and write-{} policy.", 
+                if self.l2.walloc_enabled { "write" } else { "no write" },
+                if self.l2.walloc_enabled { "back" } else { "through" })?;
         writeln!(f, "Number of bits used for the index is {}.", self.l2.idx_size)?;
         writeln!(f, "Number of bits used for the offset is {}.", self.l2.offset_size)?;
         writeln!(f)?;

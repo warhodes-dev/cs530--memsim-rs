@@ -10,9 +10,11 @@ use trace::TraceReader;
 use memory::Memory;
 
 const TABLE_HEADER: &str =
-   /*Typeof*/"Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2  \n\
-     Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n\
-     -------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
+     /*Type*/"  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2  \n\
+     Address    Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n\
+     -------- - ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
+    //        ^
+    // TODO: remove this
 
 fn main() {
     let config_path = "./trace.config";

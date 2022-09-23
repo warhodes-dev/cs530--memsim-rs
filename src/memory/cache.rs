@@ -1,11 +1,17 @@
 use std::collections::VecDeque;
-use crate::{config, utils::bits};
+use crate::{trace, config, utils::bits};
 use super::{Query, lru::Set};
 
 pub struct CacheResponse {
     pub tag: u32,
     pub idx: u32,
     pub result: Query,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq)]
+pub enum CacheEntry {
+    Clean(u32),
+    Dirty(u32),
 }
 
 pub struct Cache {
@@ -23,7 +29,8 @@ impl Cache {
         }
     }
 
-    pub fn lookup(&mut self, addr: u32) -> CacheResponse {
+    pub fn lookup(&mut self, request: trace::RawTrace) -> CacheResponse {
+        let addr = request.addr();
         let (block_addr, block_offset) = bits::split_at(addr, self.config.offset_size);
         let (tag, idx) = bits::split_at(block_addr, self.config.idx_size);
 
@@ -31,6 +38,8 @@ impl Cache {
 
         let block = set.lookup(tag);
 
+        // This is all fucked. Cache structure needs to be changed to handle Clean/Dirty and
+        // program logic needs to handle read/write
         let query_result = if block.is_some() {
             Query::Hit
         } else {
@@ -42,6 +51,15 @@ impl Cache {
             tag,
             idx,
             result: query_result,
+        }
+    }
+}
+
+impl CacheEntry {
+    fn inner(&self) -> u32 {
+        match self {
+            CacheEntry::Clean(n) => *n,
+            CacheEntry::Dirty(n) => *n,
         }
     }
 }

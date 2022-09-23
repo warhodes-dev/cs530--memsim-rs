@@ -8,6 +8,9 @@ case $1 in
         trace_file=../memhier/ext_trace.dat
         ;;
     3)
+        trace_file=../memhier/wr_trace.dat
+        ;;
+    4)
         trace_file=../memhier/long_trace.dat
         ;;
     *)
@@ -16,4 +19,4 @@ case $1 in
         ;;
 esac
 
-cat $trace_file | cargo run
+cat $trace_file | RUSTFLAGS="-Awarnings" cargo run

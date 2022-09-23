@@ -31,8 +31,8 @@ impl Memory {
         Memory {tlb, pt, dc, l2, config}
     }
 
-    pub fn access(&mut self, raw_trace: trace::RawTrace) -> Result<AccessEvent, Box<dyn std::error::Error>> {
-        let raw_addr = raw_trace.addr();
+    pub fn access(&mut self, request: trace::RawTrace) -> Result<AccessEvent, Box<dyn std::error::Error>> {
+        let raw_addr = request.addr();
 
         // Make sure addr is a reasonable size
         match self.config.address_type {
@@ -62,9 +62,10 @@ impl Memory {
             },
         };
 
-        let dc_response = self.dc.lookup(raw_addr);
+        let dc_response = self.dc.lookup(request);
 
         let event = AccessEvent {
+            trace: Some(request), // TODO: remove this
             addr: raw_addr,
             page_offset,
             physical_page_num,
@@ -81,6 +82,7 @@ impl Memory {
 /// Represents the details of a successful access of the memory simulation.
 #[derive(Default)]
 pub struct AccessEvent {
+    trace: Option<trace::RawTrace>, // TODO: remove this
     addr: u32,
     virtual_page_num: Option<u32>,
     page_offset: u32,
@@ -108,9 +110,20 @@ impl AccessEvent {
 impl std::fmt::Display for AccessEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         write!(f, 
-            //addr  pg # pgoff tbtg tbix tlbr ptrs phypg dctag dcidx dcrs l2tg l2ix l2rs
-            "{:08x} {:6} {:4x} {:6} {:3} {:4} {:4} {:4x} {:6x} {:3x} {:4} {:6} {:3} {:4}",
+            //addr     pg # pgoff tbtg tbix tlbr ptrs phypg dctag dcidx dcrs l2tg l2ix l2rs
+            "{:08x} {} {:6} {:4x} {:6} {:3} {:4} {:4} {:4x} {:6x} {:3x} {:4} {:6} {:3} {:4}",
+            //      ^
+            // TODO: remove this
+
             self.addr,
+
+            // TODO: remove this -------------------------+
+            match self.trace {                         // |
+                Some(trace::RawTrace::Read(_)) => "R", // |
+                Some(trace::RawTrace::Write(_)) => "W",// |
+                _ => "?",                              // |
+            },                                         // |
+            // -------------------------------------------+
             self.virtual_page_num.map_or("".to_string(), |n| format!("{:6x}", n)),
             self.page_offset,
             self.tlb_tag.map_or("".to_string(), |n| format!("{:6x}", n)),
