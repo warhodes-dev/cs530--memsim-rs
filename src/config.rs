@@ -70,21 +70,6 @@ pub struct MemoryConfig {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum AddressType {
-    Physical,
-    Virtual,
-}
-
-impl AddressType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Physical => "Physical",
-            Self::Virtual => "Virtual",
-        }
-    }
-}
-
-#[derive(Copy, Clone, Debug)]
 pub struct Config {
     pub tlb: TLBConfig,
     pub pt: PageTableConfig,
@@ -316,3 +301,17 @@ impl std::fmt::Display for Config {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub enum AddressType {
+    Physical,
+    Virtual,
+}
+
+impl AddressType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Physical => "Physical",
+            Self::Virtual => "Virtual",
+        }
+    }
+}

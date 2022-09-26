@@ -1,20 +1,14 @@
 /* Austin Rhodes
  * PA 1: Memory Hierarchy Simulation
  * COSC 530 -- Fall 2022 */
-mod config;
-mod trace;
-mod utils;
-mod memory;
-use config::Config;
-use trace::TraceReader;
-use memory::Memory;
+use memsim_rs::config::Config;
+use memsim_rs::trace::{TraceReader, RawTrace};
+use memsim_rs::memory::Memory;
 
 const TABLE_HEADER: &str =
-     /*Type*/"  Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2  \n\
-     Address    Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n\
-     -------- - ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
-    //        ^
-    // TODO: remove this
+     /*Type*/"Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2  \n\
+     Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n\
+     -------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
 
 fn main() {
     let config_path = "./trace.config";
@@ -44,9 +38,15 @@ fn main() {
 
     println!("{} {}", addr_type.as_str(), TABLE_HEADER);
     for trace_event in trace_reader {
+        // Debug -------------
+        let access_result_char = match trace_event {
+            RawTrace::Read(_) => "R",
+            RawTrace::Write(_) => "W",
+        };
+        // End Debug -----------
         let access_result = mem.access(trace_event);
         match access_result {
-            Ok(access) => println!("{}", access),
+            Ok(access) => println!("{} {}", access, access_result_char),
             Err(e) => {
                 eprintln!("Invalid access: {}", e);
                 return;
