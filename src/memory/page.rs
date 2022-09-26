@@ -1,14 +1,5 @@
 use crate::{config, utils::bits};
 
-pub struct PhysicalAddr {
-    pub page_num: u32,
-    pub page_offset: u32,
-}
-
-pub struct VirtualAddr {
-    pub page_num: u32,
-    pub page_offset: u32,
-}
 
 pub struct PageTable {
     config: config::PageTableConfig
@@ -28,6 +19,16 @@ impl PageTable {
         let (page_num, page_offset) = bits::split_at(addr, self.config.offset_size);
         PhysicalAddr { page_num, page_offset }
     }
+}
+
+pub struct PhysicalAddr {
+    pub page_num: u32,
+    pub page_offset: u32,
+}
+
+pub struct VirtualAddr {
+    pub page_num: u32,
+    pub page_offset: u32,
 }
 
 // 1100 | 1000 0010
