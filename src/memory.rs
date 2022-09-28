@@ -12,7 +12,11 @@ use crate::{
     }
 };
 
-type AccessEvent = trace::RawTrace;
+/// Represents the input access events.
+/// 
+/// Contains either a physical or virtual address (based on config) and can
+/// either be a AccessEvent::Read or a AccessEvent::Write.
+type AccessEvent = trace::TraceEvent;
 
 impl AccessEvent {
     fn is_write(&self) -> bool {
@@ -23,6 +27,7 @@ impl AccessEvent {
     }
 }
 
+/// The simulated memory system
 pub struct Memory {
     tlb: Tlb,
     pt: PageTable,
@@ -32,6 +37,7 @@ pub struct Memory {
 }
 
 impl Memory {
+    /// Configures all submodules of the memory system and initializes the memory simulation object.
     pub fn new(config: Config) -> Self {
         let tlb = Tlb::new(&config.tlb);
         let pt = PageTable::new(config.pt);
@@ -41,6 +47,7 @@ impl Memory {
         Memory {tlb, pt, dc, l2, config}
     }
 
+    /// Issue an access event to the memory system (which is either a read or a write).
     pub fn access(&mut self, request: AccessEvent) -> Result<AccessResult, Box<dyn std::error::Error>> {
         let raw_addr = request.addr();
 
@@ -88,7 +95,7 @@ impl Memory {
     }
 }
 
-/// Represents the details of a successful access of the memory simulation.
+/// Details the interior behavior of a simulated access to the memory system.
 #[derive(Default)]
 pub struct AccessResult {
     addr: u32,
@@ -109,6 +116,7 @@ pub struct AccessResult {
 }
 
 impl AccessResult { 
+    /// Verifies that the memory simulation behavior is at least in accordance with the config.
     fn is_valid(&self, config: &Config) -> bool {
         todo!()
     }
@@ -139,6 +147,7 @@ impl std::fmt::Display for AccessResult {
 }
 
 #[derive(Eq, PartialEq)]
+/// A query to any of the cache subsystems, which can either be QueryResult::Hit
 pub enum QueryResult {
     Hit,
     Miss,
@@ -159,21 +168,3 @@ impl QueryResult {
         }
     }
 }
-
-/* 
-#[cfg(test)]
-mod test {
-    use super::AccessResult;
-
-    #[test]
-    fn test_output_string() {
-        let ae = AccessResult {
-            addr: 0xc83,
-            virtual_page: Some(0xc),
-            page_offset: 0x83,
-            ..Default::default()
-        };
-        println!("{ae}")
-    }
-}
-*/
