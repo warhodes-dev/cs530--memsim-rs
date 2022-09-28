@@ -2,7 +2,7 @@
  * PA 1: Memory Hierarchy Simulation
  * COSC 530 -- Fall 2022 */
 use memsim_rs::config::Config;
-use memsim_rs::trace::{TraceReader, RawTrace};
+use memsim_rs::trace::{TraceReader, TraceEvent};
 use memsim_rs::memory::Memory;
 
 const TABLE_HEADER: &str =
@@ -40,8 +40,8 @@ fn main() {
     for trace_event in trace_reader {
         // Debug -------------
         let access_result_char = match trace_event {
-            RawTrace::Read(_) => "R",
-            RawTrace::Write(_) => "W",
+            TraceEvent::Read(_) => "R",
+            TraceEvent::Write(_) => "W",
         };
         // End Debug -----------
         let access_result = mem.access(trace_event);

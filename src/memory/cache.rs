@@ -2,8 +2,6 @@ use crate::{config, utils::bits};
 use super::{QueryResult, AccessEvent};
 use lru::LRUSet;
 
-type Writeback<T> = Option<T>;
-
 pub struct CacheResponse {
     pub tag: u32,
     pub idx: u32,
@@ -36,7 +34,7 @@ impl CPUCache {
         let (result, writeback) = match set.lookup(tag) {
             Some(block) => {
                 if self.config.wback_enabled {
-                    block.touch();
+                    block.enfilthen();
                 }
                 (QueryResult::Hit, None)
             },
@@ -57,6 +55,7 @@ impl CPUCache {
 
                 (QueryResult::Miss, writeback)
             }
+
             // === HANDLED HERE
             // write back:
             //   when writing to the cache, simply flip dirty to true on that entry
@@ -86,7 +85,7 @@ pub struct CacheEntry {
 }
 
 impl CacheEntry {
-    fn touch(&mut self) {
+    fn enfilthen(&mut self) {
         self.dirty = true;
     }
     fn is_dirty(&self) -> bool {
@@ -103,6 +102,7 @@ mod lru {
         inner: VecDeque<CacheEntry>,
         capacity: usize,
     }
+
 
     impl LRUSet {
         pub fn new(capacity: usize) -> Self {
