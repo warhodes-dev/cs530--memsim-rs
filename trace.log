@@ -1,54 +1,46 @@
-read at 00000c84
+read at 00000d78
 
-read at 0000081c
+write at 00000d78
 
-read at 0000014c
+read at 0000004d
 
-read at 00000c84
+write at 00000d78
 
-read at 00000400
+read at 000003b7
 
-read at 00000148
+read at 00000d78
 
-read at 00000144
+read at 000003b7
 
-read at 00000c80
+write at 00000cd7
+writing back DC line with tag d7 and index 0 to memory
 
-read at 00000008
+write at 00000d78
 
-read at 00000003
+write at 000003b7
+writing back DC line with tag cd and index 0 to memory
 
-read at 0000014c
+write at 000003b7
 
-read at 00000282
+write at 0000004d
+writing back DC line with tag d7 and index 0 to memory
 
-read at 00000452
+read at 000003b7
 
-read at 00000c22
+read at 00000d78
+writing back DC line with tag 4 and index 0 to memory
 
-read at 00000452
+write at 00000cd7
+writing back DC line with tag 3b and index 0 to memory
 
-read at 0000061b
+read at 00000cd7
 
-read at 0000090a
+read at 00000cd7
 
-read at 0000090b
+write at 00000d78
 
-read at 0000061a
+read at 0000004d
+writing back DC line with tag cd and index 0 to memory
 
-read at 00000003
-
-read at 00000c80
-
-read at 00000c80
-
-read at 00000c80
-
-read at 00000c81
-
-read at 00000c82
-
-read at 00000c83
-
-read at 00000c84
+read at 0000004d
 

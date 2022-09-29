@@ -25,6 +25,7 @@ impl CPUCache {
     }
 
     pub fn lookup(&mut self, access: AccessEvent) -> CacheResponse {
+
         let addr = access.addr();
         let (block_addr, block_offset) = bits::split_at(addr, self.config.offset_size);
         let (tag, idx) = bits::split_at(block_addr, self.config.idx_size);
@@ -33,7 +34,7 @@ impl CPUCache {
 
         let (result, writeback) = match set.lookup(tag) {
             Some(block) => {
-                if self.config.wback_enabled {
+                if access.is_write() && self.config.wback_enabled {
                     block.borrow_mut().enfilthen();
                 }
                 (QueryResult::Hit, None)
@@ -47,12 +48,9 @@ impl CPUCache {
                 let evicted_block = set.push(new_entry);
                 let writeback = evicted_block
                     .filter(|block| {
-                        block.borrow().is_dirty() && self.config.wback_enabled
+                        block.is_dirty()
                     })
-                    .map(|block| {
-                        block.borrow().addr
-                    });
-
+                    .map(|block| block.addr);
                 (QueryResult::Miss, writeback)
             }
 
@@ -68,6 +66,7 @@ impl CPUCache {
 
             // It's always WRITE BACK + WRITE ALLOCATE
         };
+
         CacheResponse {
             tag,
             idx,
@@ -94,31 +93,34 @@ impl CacheEntry {
 }
 
 mod lru {
-    use std::{collections::VecDeque, cell::RefCell};
+    use std::{collections::VecDeque, cell::RefCell, rc::Rc};
     use super::CacheEntry;
 
     #[derive(Clone, Debug)]
     pub struct LRUSet {
-        inner: VecDeque<RefCell<CacheEntry>>,
+        inner: VecDeque<Rc<RefCell<CacheEntry>>>,
         capacity: usize,
     }
 
 
     impl LRUSet {
         pub fn new(capacity: usize) -> Self {
-            let inner = VecDeque::<RefCell<CacheEntry>>::with_capacity(capacity);
+            let inner = VecDeque::<Rc<RefCell<CacheEntry>>>::with_capacity(capacity);
             LRUSet { inner, capacity }
         }
 
-        pub fn push(&mut self, entry: CacheEntry) -> Option<RefCell<CacheEntry>> {
+        pub fn push(&mut self, entry: CacheEntry) -> Option<CacheEntry> {
             let evicted_item = if self.inner.len() >= self.capacity {
                 self.inner.pop_back()
+                    .map(|entry| {
+                        entry.borrow().clone()
+                    })
             } else { None };
-            self.inner.push_front(RefCell::new(entry));
+            self.inner.push_front(Rc::new(RefCell::new(entry)));
             evicted_item
         }
 
-        pub fn lookup(&mut self, tag: u32) -> Option<RefCell<CacheEntry>> {
+        pub fn lookup(&mut self, tag: u32) -> Option<Rc<RefCell<CacheEntry>>> {
             let item_search = self.inner
                 .iter()
                 .position(|entry| entry.borrow().tag == tag);
