@@ -34,7 +34,7 @@ impl CPUCache {
         let (result, writeback) = match set.lookup(tag) {
             Some(block) => {
                 if self.config.wback_enabled {
-                    block.enfilthen();
+                    block.borrow_mut().enfilthen();
                 }
                 (QueryResult::Hit, None)
             },
@@ -47,10 +47,10 @@ impl CPUCache {
                 let evicted_block = set.push(new_entry);
                 let writeback = evicted_block
                     .filter(|block| {
-                        block.is_dirty() && self.config.wback_enabled
+                        block.borrow().is_dirty() && self.config.wback_enabled
                     })
                     .map(|block| {
-                        block.addr
+                        block.borrow().addr
                     });
 
                 (QueryResult::Miss, writeback)
@@ -94,39 +94,50 @@ impl CacheEntry {
 }
 
 mod lru {
-    use std::collections::VecDeque;
+    use std::{collections::VecDeque, cell::RefCell};
     use super::CacheEntry;
 
     #[derive(Clone, Debug)]
     pub struct LRUSet {
-        inner: VecDeque<CacheEntry>,
+        inner: VecDeque<RefCell<CacheEntry>>,
         capacity: usize,
     }
 
 
     impl LRUSet {
         pub fn new(capacity: usize) -> Self {
-            let inner = VecDeque::<CacheEntry>::with_capacity(capacity);
+            let inner = VecDeque::<RefCell<CacheEntry>>::with_capacity(capacity);
             LRUSet { inner, capacity }
         }
 
-        pub fn push(&mut self, entry: CacheEntry) -> Option<CacheEntry> {
+        pub fn push(&mut self, entry: CacheEntry) -> Option<RefCell<CacheEntry>> {
             let evicted_item = if self.inner.len() >= self.capacity {
                 self.inner.pop_back()
             } else { None };
-            self.inner.push_front(entry);
+            self.inner.push_front(RefCell::new(entry));
             evicted_item
         }
 
-        pub fn lookup(&mut self, tag: u32) -> Option<&mut CacheEntry> {
-            self.inner
+        pub fn lookup(&mut self, tag: u32) -> Option<RefCell<CacheEntry>> {
+            let item_search = self.inner
                 .iter()
-                .position(|&entry| entry.tag == tag)
+                .position(|entry| entry.borrow().tag == tag);
+           
+            if let Some(item_idx) = item_search {
+                let item = self.inner.remove(item_idx).unwrap();
+                self.inner.push_front(item.clone());
+                Some(item)
+            } else {
+                None
+            }
+                /* 
                 .map(|item_idx| {
-                    let item = self.inner.remove(item_idx).unwrap();
+                    let item = &mut self.inner.remove(item_idx).unwrap();
+                    item.enfilthen();
                     self.inner.push_front(item);
-            });
-            self.inner.iter_mut().last()
+                    *item
+                })
+                */
         }
     }
 }

@@ -2,7 +2,6 @@ mod page;
 mod tlb;
 mod cache;
 use crate::{
-    trace,
     config::{self, Config, MemoryConfig},
     utils::{self, bits},
     memory::{
@@ -15,19 +14,22 @@ use crate::{
 /// Represents the input access events.
 /// 
 /// Contains either a physical or virtual address (based on config) and can
-/// either be a AccessEvent::Read or a AccessEvent::Write.
-type AccessEvent = trace::TraceEvent;
+/// either be a `Read` or a `Write`.
+pub enum AccessEvent {
+    Read(u32),
+    Write(u32),
+}
 
 impl AccessEvent {
-    fn is_write(&self) -> bool {
+    fn addr(&self) -> u32 {
         match self {
-            AccessEvent::Write(_) => true,
-            _ => false,
+            AccessEvent::Read(addr) => *addr,
+            AccessEvent::Write(addr) => *addr,
         }
     }
 }
 
-/// The simulated memory system
+/// The simulated memory system.
 pub struct Memory {
     tlb: Tlb,
     pt: PageTable,
@@ -48,8 +50,12 @@ impl Memory {
     }
 
     /// Issue an access event to the memory system (which is either a read or a write).
-    pub fn access(&mut self, request: AccessEvent) -> Result<AccessResult, Box<dyn std::error::Error>> {
-        let raw_addr = request.addr();
+    pub fn access(&mut self, raw_access_type: char, raw_addr: u32) -> Result<AccessResult, Box<dyn std::error::Error>> {
+        let access_event = match raw_access_type {
+            'r' | 'R' => AccessEvent::Read(raw_addr),
+            'w' | 'W' => AccessEvent::Write(raw_addr),
+            _ => error!("invalid access type: {}", raw_access_type)
+        };
 
         // Make sure addr is a reasonable size
         match self.config.address_type {
@@ -79,7 +85,7 @@ impl Memory {
             },
         };
 
-        let dc_response = self.dc.lookup(request);
+        let dc_response = self.dc.lookup(access_event);
 
         let event = AccessResult {
             addr: raw_addr,
@@ -147,7 +153,7 @@ impl std::fmt::Display for AccessResult {
 }
 
 #[derive(Eq, PartialEq)]
-/// A query to any of the cache subsystems, which can either be QueryResult::Hit
+/// A query to any of the cache subsystems, which can either be `Hit` or `Miss`
 pub enum QueryResult {
     Hit,
     Miss,

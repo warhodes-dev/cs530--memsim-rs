@@ -2,13 +2,40 @@
  * PA 1: Memory Hierarchy Simulation
  * COSC 530 -- Fall 2022 */
 use memsim_rs::config::Config;
-use memsim_rs::trace::{TraceReader, TraceEvent};
 use memsim_rs::memory::Memory;
+use std::io::BufRead;
 
 const TABLE_HEADER: &str =
      /*Type*/"Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2  \n\
      Address  Page # Off  Tag    Ind Res. Res. Pg # DC Tag Ind Res. L2 Tag Ind Res.\n\
      -------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
+
+/// Read the trace file in from stdin. Produces an iterator of tuples of `char` and `u32`,
+/// which can be thought of as (char_wr, addr) where char_wr is either `'r'` or `'w'` for 
+/// 'read' or 'write'.
+pub fn trace_from_stdin(
+    stdin_lock: std::io::StdinLock
+) -> Result<impl Iterator<Item = (char, u32)> + '_, Box<dyn std::error::Error>> {
+    let lines = stdin_lock.lines()
+        .filter_map(|line| line.ok())
+        .filter(|line| !line.is_empty() && line.contains(':'));
+
+    let trace_refs = lines.filter_map(|line| -> Option<(char, u32)> {
+        let idx = line.find(':').map(|i| i+1).unwrap();
+        let (access_type_str, access_addr_str) = line.split_at(idx);
+
+        let access_type = access_type_str.chars().next().ok_or("bad trace char");
+        let access_addr = u32::from_str_radix(access_addr_str, 16);
+
+        if access_type.is_ok() && access_addr.is_ok() {
+            Some((access_type.unwrap(), access_addr.unwrap()))
+        } else {
+            None
+        }
+    });
+
+    Ok(trace_refs)
+}
 
 fn main() {
     let config_path = "./trace.config";
@@ -28,25 +55,20 @@ fn main() {
 
     let mut mem = Memory::new(config);
 
-    // This is gross on purpose. Returning 'static handles was not
-    // added until rustc version 1.61.0. For now, we must instantiate
-    // the stdin lock in main before passing it into impl TraceReader
-    // (since TraceReader::from__() returns a iterator over 'lines').
+    // Oddity: Returning 'static handles was not added until rustc 
+    // version 1.61.0. For now, we must instantiate the stdin lock 
+    // in main before passing it into `trace_from_stdin(...)` (since 
+    // `trace_from_stdin(...)` returns a iterator over the stdin buf).
     let stdin = std::io::stdin();
     let stdin_lock = stdin.lock();
-    let trace_reader = TraceReader::from_stdin(stdin_lock).expect("Error reading from stdin");
+    let trace_reader = trace_from_stdin(stdin_lock)
+        .expect("Error reading from stdin");
 
     println!("{} {}", addr_type.as_str(), TABLE_HEADER);
     for trace_event in trace_reader {
-        // Debug -------------
-        let access_result_char = match trace_event {
-            TraceEvent::Read(_) => "R",
-            TraceEvent::Write(_) => "W",
-        };
-        // End Debug -----------
-        let access_result = mem.access(trace_event);
+        let access_result = mem.access(trace_event.0, trace_event.1);
         match access_result {
-            Ok(access) => println!("{} {}", access, access_result_char),
+            Ok(access) => println!("{} {}", access, trace_event.0),
             Err(e) => {
                 eprintln!("Invalid access: {}", e);
                 return;
