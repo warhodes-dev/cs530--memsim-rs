@@ -23,8 +23,15 @@ pub enum AccessEvent {
 impl AccessEvent {
     fn addr(&self) -> u32 {
         match self {
-            AccessEvent::Read(addr) => *addr,
             AccessEvent::Write(addr) => *addr,
+            AccessEvent::Read(addr) => *addr,
+        }
+    }
+
+    fn is_write(&self) -> bool {
+        match self {
+            AccessEvent::Write(_) => true,
+            AccessEvent::Read(_) => false,
         }
     }
 }
@@ -50,7 +57,12 @@ impl Memory {
     }
 
     /// Issue an access event to the memory system (which is either a read or a write).
-    pub fn access(&mut self, raw_access_type: char, raw_addr: u32) -> Result<AccessResult, Box<dyn std::error::Error>> {
+    pub fn access(
+        &mut self, 
+        raw_access_type: char, 
+        raw_addr: u32
+    ) -> Result<AccessResult, Box<dyn std::error::Error>> {
+
         let access_event = match raw_access_type {
             'r' | 'R' => AccessEvent::Read(raw_addr),
             'w' | 'W' => AccessEvent::Write(raw_addr),
@@ -61,13 +73,13 @@ impl Memory {
         match self.config.address_type {
             config::AddressType::Virtual => {
                 if raw_addr > self.config.max_virtual_addr {
-                    panic!("virtual address {:08x} is too large (maximum size is 0x{:x})",
+                    error!("virtual address {:08x} is too large (maximum size is 0x{:x})",
                         raw_addr, self.config.max_virtual_addr - 1);
                 }
             },
             config::AddressType::Physical => {
                 if raw_addr > self.config.max_physical_addr {
-                    panic!("physical address {:08x} is too large (maximum size is 0x{:x})",
+                    error!("physical address {:08x} is too large (maximum size is 0x{:x})",
                         raw_addr, self.config.max_physical_addr - 1);
                 }
             }
@@ -86,6 +98,7 @@ impl Memory {
         };
 
         let dc_response = self.dc.lookup(access_event);
+        
 
         let event = AccessResult {
             addr: raw_addr,
