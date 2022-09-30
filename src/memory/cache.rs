@@ -9,8 +9,24 @@ pub struct CacheResponse {
     pub writeback: Option<u32>,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct CacheEntry {
+    tag: u32,
+    addr: u32,
+    dirty: bool,
+}
+
+impl CacheEntry {
+    fn enfilthen(&mut self) {
+        self.dirty = true;
+    }
+    fn is_dirty(&self) -> bool {
+        self.dirty
+    }
+}
+
 pub struct CPUCache {
-    data: Vec<LRUSet>,
+    sets: Vec<LRUSet>,
     config: config::CacheConfig,
 }
 
@@ -19,18 +35,18 @@ impl CPUCache {
         let empty_set = LRUSet::new(config.set_entries as usize);
         let sets = vec![ empty_set ; config.sets as usize ];
         CPUCache { 
-            data: sets,
+            sets,
             config,
         }
     }
 
-    pub fn lookup(&mut self, access: AccessEvent) -> CacheResponse {
+    pub fn lookup(&mut self, access: &AccessEvent) -> CacheResponse {
 
         let addr = access.addr();
         let (block_addr, block_offset) = bits::split_at(addr, self.config.offset_size);
         let (tag, idx) = bits::split_at(block_addr, self.config.idx_size);
 
-        let set = &mut self.data[idx as usize];
+        let set = &mut self.sets[idx as usize];
 
         let (result, writeback) = match set.lookup(tag) {
             Some(block) => {
@@ -53,18 +69,6 @@ impl CPUCache {
                     .map(|block| block.addr);
                 (QueryResult::Miss, writeback)
             }
-
-            // === HANDLED HERE
-            // write back:
-            //   when writing to the cache, simply flip dirty to true on that entry
-            //   when an item is evicted from the cache:
-            //     if it's clean, do nothing
-            //     if it's dirty, write back to memory 
-            // write through:
-            //   when writing to the cache, also write to main memory
-            //   TIP: everything is always clean
-
-            // It's always WRITE BACK + WRITE ALLOCATE
         };
 
         CacheResponse {
@@ -76,32 +80,20 @@ impl CPUCache {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct CacheEntry {
-    tag: u32,
-    addr: u32,
-    dirty: bool,
-}
-
-impl CacheEntry {
-    fn enfilthen(&mut self) {
-        self.dirty = true;
-    }
-    fn is_dirty(&self) -> bool {
-        self.dirty
-    }
-}
-
 mod lru {
     use std::{collections::VecDeque, cell::RefCell, rc::Rc};
     use super::CacheEntry;
 
     #[derive(Clone, Debug)]
+    /// A simple LRU Set which evicts elements upon insertion such that the set never exceeds `capacity`
+    //
+    //  This could be faster. By using a VecDequeue, 'touching' an item of the cache is O(n). Ideally,
+    //  some kind of linked hash map could be used for O(1) lookup _and_ O(1) touch. I suspect that
+    //  designing that from scratch would have some serious rust shenanigans that I don't want to deal with.
     pub struct LRUSet {
         inner: VecDeque<Rc<RefCell<CacheEntry>>>,
         capacity: usize,
     }
-
 
     impl LRUSet {
         pub fn new(capacity: usize) -> Self {
@@ -109,6 +101,7 @@ mod lru {
             LRUSet { inner, capacity }
         }
 
+        /// Push an item to the LRU Set, potentially evicting the oldest item
         pub fn push(&mut self, entry: CacheEntry) -> Option<CacheEntry> {
             let evicted_item = if self.inner.len() >= self.capacity {
                 self.inner.pop_back()
@@ -120,6 +113,8 @@ mod lru {
             evicted_item
         }
 
+        /// Look up an item in the LRU Set. If found, the item is 'touched' and moved to the front
+        /// of the queue.
         pub fn lookup(&mut self, tag: u32) -> Option<Rc<RefCell<CacheEntry>>> {
             let item_search = self.inner
                 .iter()
@@ -132,14 +127,6 @@ mod lru {
             } else {
                 None
             }
-                /* 
-                .map(|item_idx| {
-                    let item = &mut self.inner.remove(item_idx).unwrap();
-                    item.enfilthen();
-                    self.inner.push_front(item);
-                    *item
-                })
-                */
         }
     }
 }

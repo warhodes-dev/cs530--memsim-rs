@@ -21,6 +21,34 @@ pub enum AccessEvent {
 }
 
 impl AccessEvent {
+    fn from_raw(
+        access_type: char, 
+        addr: u32, 
+        config: &MemoryConfig
+    ) -> Result<AccessEvent, Box<dyn std::error::Error>> {
+        match config.address_type {
+            config::AddressType::Virtual => {
+                if addr > config.max_virtual_addr {
+                    error!("virtual address {:08x} is too large (maximum size is 0x{:x})",
+                        addr, config.max_virtual_addr - 1);
+                }
+            },
+            config::AddressType::Physical => {
+                if addr > config.max_physical_addr {
+                    error!("physical address {:08x} is too large (maximum size is 0x{:x})",
+                        addr, config.max_physical_addr - 1);
+                }
+            }
+        }
+
+        let access_event = match access_type {
+            'r' | 'R' => AccessEvent::Read(addr),
+            'w' | 'W' => AccessEvent::Write(addr),
+            _ => error!("invalid access type: {}", access_type)
+        };
+        Ok(access_event)
+    }
+
     fn addr(&self) -> u32 {
         match self {
             AccessEvent::Write(addr) => *addr,
@@ -62,12 +90,10 @@ impl Memory {
         raw_access_type: char, 
         raw_addr: u32
     ) -> Result<AccessResult, Box<dyn std::error::Error>> {
-
-        let access_event = match raw_access_type {
-            'r' | 'R' => AccessEvent::Read(raw_addr),
-            'w' | 'W' => AccessEvent::Write(raw_addr),
-            _ => error!("invalid access type: {}", raw_access_type)
-        };
+        //translate to phys first...
+        // check tlb
+        // by the way, study performance equations
+        let access_event = AccessEvent::from_raw(raw_access_type, raw_addr, &self.config)?;
 
         // Make sure addr is a reasonable size
         match self.config.address_type {
@@ -92,13 +118,15 @@ impl Memory {
                 unimplemented!()
             },
             config::AddressType::Physical => {
-                let phys_addr = self.pt.passthrough(raw_addr);
+                let phys_addr = self.pt.passthrough(raw_addr); // TODO: I don't like this
                 (phys_addr.page_num, phys_addr.page_offset)
             },
         };
 
-        let dc_response = self.dc.lookup(access_event);
-        
+        let dc_response = self.dc.lookup(&access_event);
+        if dc_response.result == QueryResult::Miss {
+            let l2_response = self.l2.lookup(&access_event);
+        }
 
         let event = AccessResult {
             addr: raw_addr,

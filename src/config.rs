@@ -33,6 +33,21 @@ macro_rules! parse_yn {
 }
 
 #[derive(Copy, Clone, Debug)]
+pub enum AddressType {
+    Physical,
+    Virtual,
+}
+
+impl AddressType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Physical => "Physical",
+            Self::Virtual => "Virtual",
+        }
+    }
+}
+
+#[derive(Copy, Clone, Debug)]
 pub struct TLBConfig {
     pub sets: u32,
     pub set_entries: u32,
@@ -41,7 +56,7 @@ pub struct TLBConfig {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PageTableConfig {
+pub struct PageTableConfig { // TODO: move this to memoryconfig
     pub virtual_pages: u32,
     pub physical_pages: u32,
     pub page_size: u32,
@@ -88,13 +103,18 @@ impl Config {
             .filter(|line| !line.is_empty() && line.contains(':'));
 
         // Assume config file is always in correct order
-        let mut opts = Vec::<String>::new();
-        for line in lines {
-            if let Some(i) = line.find(':').map(|i| i+1)  {
-                let (_, opt) = line.split_at(i + 1);
-                opts.push(opt.trim().to_owned());
+        let opts = {
+            let mut fields = Vec::<String>::new();
+            for line in lines {
+                if let Some(idx) = line.find(':') {
+                    let (_left_field, right_field) = line.split_at(idx + 1);
+                    let mut field = right_field.to_owned();
+                    field.retain(|c| !c.is_whitespace());
+                    fields.push(field);
+                }
             }
-        }
+            fields
+        };
 
         if opts.len() != 16 {
             error!("Expected 16 configuration parameters, found {}.", opts.len());
@@ -103,7 +123,7 @@ impl Config {
         let tlb_config = {
             let sets = opts[0].parse::<u32>()?;
             let set_entries = opts[1].parse::<u32>()?;
-            let idx_size   = bits::min_repr(sets as u32) as u32;
+            let idx_size   = bits::min_repr(sets);
 		    let enabled = opts[14] == "y";
             
             if sets > MAX_TLB_SETS {
@@ -301,17 +321,3 @@ impl std::fmt::Display for Config {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub enum AddressType {
-    Physical,
-    Virtual,
-}
-
-impl AddressType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Physical => "Physical",
-            Self::Virtual => "Virtual",
-        }
-    }
-}
