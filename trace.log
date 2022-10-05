@@ -1,20 +1,4 @@
-read at 00000e28
+read at 00003fff
 
-read at 00000a70
-
-write at 00000e28
-
-write at 0000003b
-
-read at 00000e28
-
-write at 00000fbb
-
-read at 00000fbb
-
-read at 00000a70
-
-write at 0000003b
-
-read at 00000fbb
+read at 00000001
 

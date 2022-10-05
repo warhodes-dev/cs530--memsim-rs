@@ -124,10 +124,17 @@ impl Memory {
         };
 
         let dc_response = self.dc.lookup(&access_event);
-        let l2_response = if dc_response.result == QueryResult::Miss || self. {
-            Some(self.l2.lookup(&access_event))
-        } else { 
-            None
+        let l2_response: Option<cache::CacheResponse> = match dc_response.result {
+            QueryResult::Hit => {
+                // If DC has a write through policy, then we write through to L2
+                if access_event.is_write() && !self.dc.config.wback_enabled {
+                    self.l2.lookup(&access_event);
+                }
+                None
+            },
+            QueryResult::Miss => {
+                None
+            },
         };
 
         let event = AccessResult {
@@ -137,9 +144,6 @@ impl Memory {
             dc_tag: dc_response.tag,
             dc_idx: dc_response.idx,
             dc_res: Some(dc_response.result),
-            l2_tag: l2_response.as_ref().map(|r| r.tag),
-            l2_idx: l2_response.as_ref().map(|r| r.idx),
-            l2_res: l2_response.map(|r| r.result),
             ..Default::default()
         };
 

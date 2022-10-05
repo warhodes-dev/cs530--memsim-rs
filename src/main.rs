@@ -74,6 +74,7 @@ fn main() {
         match access_result {
             Ok(access) => {
                 print!("{}", access);
+                #[cfg(debug_assertions)]
                 print!(" {}", trace_event.0);
                 println!()
             }
