@@ -4,6 +4,7 @@
 use memsim_rs::config::Config;
 use memsim_rs::memory::Memory;
 use std::io::BufRead;
+use std::env;
 
 const TABLE_HEADER: &str =
      /*Type*/"Virt.  Page TLB    TLB TLB  PT   Phys        DC  DC          L2  L2  \n\
@@ -38,10 +39,13 @@ pub fn trace_from_stdin(
 }
 
 fn main() {
-    let config_path = "./trace.config";
+    let config_path = match env::var("MEMSIM_CONFIG") {
+        Ok(cfg) => cfg,
+        Err(_) => "./trace.config".to_string(),
+    };
 
     //TODO: Remove this printing last
-    let config = match Config::from_file(config_path) {
+    let config = match Config::from_file(&config_path) {
         Ok(c) => {
             println!("{}", c);
             c
@@ -68,7 +72,7 @@ fn main() {
     for trace_event in trace_reader {
         let access_result = mem.access(trace_event.0, trace_event.1);
         match access_result {
-            Ok(access) => println!("{} {}", access, trace_event.0),
+            Ok(access) => println!("{}", access),
             Err(e) => {
                 eprintln!("Invalid access: {}", e);
                 return;
