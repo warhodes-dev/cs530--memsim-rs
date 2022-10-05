@@ -292,7 +292,7 @@ impl std::fmt::Display for Config {
         writeln!(f, "Each set contains {} entries.", self.dc.set_entries)?;
         writeln!(f, "Each line is {} bytes.", self.dc.line_size)?;
         writeln!(f, "The cache uses a {}write-allocate and write-{} policy.", 
-                if self.dc.walloc_enabled { "" } else { "no-" },
+                if self.dc.walloc_enabled { "" } else { "no " },
                 if self.dc.wback_enabled { "back" } else { "through" })?;
         writeln!(f, "Number of bits used for the index is {}.", self.dc.idx_size)?;
         writeln!(f, "Number of bits used for the offset is {}.", self.dc.offset_size)?;
@@ -301,8 +301,8 @@ impl std::fmt::Display for Config {
         writeln!(f, "L2-cache contains {} sets.", self.l2.sets)?;
         writeln!(f, "Each set contains {} entries.", self.l2.set_entries)?;
         writeln!(f, "Each line is {} bytes.", self.l2.line_size)?;
-        writeln!(f, "The cache uses a {}-allocate and write-{} policy.", 
-                if self.l2.walloc_enabled { "write" } else { "no write" },
+        writeln!(f, "The cache uses a {}write-allocate and write-{} policy.", 
+                if self.l2.walloc_enabled { "" } else { "no " },
                 if self.l2.wback_enabled { "back" } else { "through" })?;
         writeln!(f, "Number of bits used for the index is {}.", self.l2.idx_size)?;
         writeln!(f, "Number of bits used for the offset is {}.", self.l2.offset_size)?;

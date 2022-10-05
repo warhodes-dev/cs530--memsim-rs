@@ -27,7 +27,7 @@ impl CacheEntry {
 
 pub struct CPUCache {
     sets: Vec<LRUSet>,
-    config: config::CacheConfig,
+    pub config: config::CacheConfig,
 }
 
 impl CPUCache {
@@ -56,18 +56,22 @@ impl CPUCache {
                 (QueryResult::Hit, None)
             },
             None => {
-                let new_entry = CacheEntry {
-                    tag,
-                    addr,
-                    dirty: false,
-                };
-                let evicted_block = set.push(new_entry);
-                let writeback = evicted_block
-                    .filter(|block| {
-                        block.is_dirty()
-                    })
-                    .map(|block| block.addr);
-                (QueryResult::Miss, writeback)
+                if access.is_write() && !self.config.walloc_enabled {
+                    (QueryResult::Miss, None)
+                } else {
+                    let new_entry = CacheEntry {
+                        tag,
+                        addr,
+                        dirty: false,
+                    };
+                    let evicted_block = set.push(new_entry);
+                    let writeback = evicted_block
+                        .filter(|block| {
+                            block.is_dirty()
+                        })
+                        .map(|block| block.addr);
+                    (QueryResult::Miss, writeback)
+                }
             }
         };
 

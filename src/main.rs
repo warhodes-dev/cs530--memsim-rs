@@ -72,7 +72,11 @@ fn main() {
     for trace_event in trace_reader {
         let access_result = mem.access(trace_event.0, trace_event.1);
         match access_result {
-            Ok(access) => println!("{}", access),
+            Ok(access) => {
+                print!("{}", access);
+                print!(" {}", trace_event.0);
+                println!()
+            }
             Err(e) => {
                 eprintln!("Invalid access: {}", e);
                 return;
