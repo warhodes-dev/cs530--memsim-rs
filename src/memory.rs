@@ -124,9 +124,11 @@ impl Memory {
         };
 
         let dc_response = self.dc.lookup(&access_event);
-        if dc_response.result == QueryResult::Miss {
-            let l2_response = self.l2.lookup(&access_event);
-        }
+        let l2_response = if dc_response.result == QueryResult::Miss || self. {
+            Some(self.l2.lookup(&access_event))
+        } else { 
+            None
+        };
 
         let event = AccessResult {
             addr: raw_addr,
@@ -135,6 +137,9 @@ impl Memory {
             dc_tag: dc_response.tag,
             dc_idx: dc_response.idx,
             dc_res: Some(dc_response.result),
+            l2_tag: l2_response.as_ref().map(|r| r.tag),
+            l2_idx: l2_response.as_ref().map(|r| r.idx),
+            l2_res: l2_response.map(|r| r.result),
             ..Default::default()
         };
 
