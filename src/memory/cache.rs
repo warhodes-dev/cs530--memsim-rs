@@ -99,6 +99,7 @@ mod lru {
     //  This could be faster. By using a VecDequeue, 'touching' an item of the cache is O(n). Ideally,
     //  some kind of linked hash map could be used for O(1) lookup _and_ O(1) touch. I suspect that
     //  designing that from scratch would have some serious rust shenanigans that I don't want to deal with.
+    //  Also, the max set size is like, 16. Just a note for future reference.
     pub struct LRUSet {
         inner: VecDeque<Rc<RefCell<CacheEntry>>>,
         capacity: usize,
