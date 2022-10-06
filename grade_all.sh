@@ -5,11 +5,11 @@ cargo build --release
 
 memsim="./target/release/memsim-rs"
 
-for idx in {1..100};
+for idx in {0..100};
 do
-    cfgid_raw=$((($idx / 10) + 1))
+    cfgid_raw=$(($idx / 10))
     printf -v cfgid "%02d" $cfgid_raw
-    printf -v gsid "%03d" $((idx))
+    printf -v gsid "%03d" $idx
 
     trace_file="$gsdir/$gsid.dat"
 

@@ -18,12 +18,10 @@ pub fn trace_from_stdin(
     stdin_lock: std::io::StdinLock
 ) -> Result<impl Iterator<Item = (char, u32)> + '_, Box<dyn std::error::Error>> {
     let lines = stdin_lock.lines()
-        .filter_map(|line| line.ok())
-        .filter(|line| !line.is_empty() && line.contains(':'));
+        .filter_map(|line| line.ok());
 
     let trace_refs = lines.filter_map(|line| -> Option<(char, u32)> {
-        let idx = line.find(':').map(|i| i+1).unwrap();
-        let (access_type_str, access_addr_str) = line.split_at(idx);
+        let (access_type_str, access_addr_str) = line.split_at(1);
 
         let access_type = access_type_str.chars().next().ok_or("bad trace char");
         let access_addr = u32::from_str_radix(access_addr_str, 16);
