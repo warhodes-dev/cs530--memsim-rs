@@ -1,4 +1,7 @@
-use crate::{config, utils::bits};
+use crate::{
+    config::{self, WriteMissPolicy::*, WritePolicy::*},
+     utils::bits
+};
 use super::{QueryResult, AccessEvent};
 use lru::LRUSet;
 
@@ -49,14 +52,16 @@ impl CPUCache {
         let set = &mut self.sets[idx as usize];
 
         let (result, writeback) = match set.lookup(tag) {
+            // Some block found: Hit
             Some(block) => {
-                if access.is_write() && self.config.wback_enabled {
+                if access.is_write() && self.config.write_policy == WriteBack {
                     block.borrow_mut().enfilthen();
                 }
                 (QueryResult::Hit, None)
             },
+            // No block found: Miss
             None => {
-                if access.is_write() && !self.config.walloc_enabled {
+                if access.is_write() && self.config.write_miss_policy == NoWriteAllocate {
                     (QueryResult::Miss, None)
                 } else {
                     let new_entry = CacheEntry {

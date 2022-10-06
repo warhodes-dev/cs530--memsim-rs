@@ -2,7 +2,7 @@ mod page;
 mod tlb;
 mod cache;
 use crate::{
-    config::{self, Config, MemoryConfig},
+    config::{self, Config, MemoryConfig, WriteMissPolicy::*, WritePolicy::*},
     utils::{self, bits},
     memory::{
         page::{PageTable, PhysicalAddr, VirtualAddr},
@@ -124,17 +124,22 @@ impl Memory {
         };
 
         let dc_response = self.dc.lookup(&access_event);
-        let l2_response: Option<cache::CacheResponse> = match dc_response.result {
-            QueryResult::Hit => {
-                // If DC has a write through policy, then we write through to L2
-                if access_event.is_write() && !self.dc.config.wback_enabled {
-                    self.l2.lookup(&access_event);
-                }
-                None
-            },
-            QueryResult::Miss => {
-                None
-            },
+        let l2_response: Option<cache::CacheResponse> = if self.l2.config.enabled {
+            match dc_response.result {
+                QueryResult::Hit => {
+                    // If DC has a write through policy, then we write through to L2
+                    if access_event.is_write() && self.dc.config.write_policy == WriteThrough {
+                        Some(self.l2.lookup(&access_event))
+                    } else {
+                        None
+                    }
+                },
+                QueryResult::Miss => {
+                    Some(self.l2.lookup(&access_event))
+                },
+            }
+        } else {
+            None
         };
 
         let event = AccessResult {

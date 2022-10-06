@@ -32,7 +32,7 @@ macro_rules! parse_yn {
     }}
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 pub enum AddressType {
     Physical,
     Virtual,
@@ -45,6 +45,18 @@ impl AddressType {
             Self::Virtual => "Virtual",
         }
     }
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum WritePolicy {
+    WriteBack,
+    WriteThrough,
+}
+
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
+pub enum WriteMissPolicy {
+    WriteAllocate,
+    NoWriteAllocate,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -72,8 +84,8 @@ pub struct CacheConfig {
     pub line_size: u32,
     pub idx_size: u32,
     pub offset_size: u32,
-    pub walloc_enabled: bool,
-    pub wback_enabled: bool,
+    pub write_miss_policy: WriteMissPolicy,
+    pub write_policy: WritePolicy,
     pub enabled: bool,
 }
 
@@ -177,9 +189,11 @@ impl Config {
             let line_size = opts[7].parse::<u32>()?;
             let idx_size = bits::min_repr(sets as u32) as u32;
             let offset_size = bits::min_repr(line_size as u32) as u32;
-		    let walloc_enabled = !parse_yn!(opts, 8); 
-            // write-back is always with write-allocate
-            let wback_enabled = walloc_enabled; 
+		    let (write_policy, write_miss_policy) = match opts[8].as_str() {
+                "y" => (WritePolicy::WriteThrough, WriteMissPolicy::NoWriteAllocate),
+                "n" => (WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate),
+                s => error!("Field 8 (DC write/write miss policy) must be 'y' or 'n' but was {}", s),
+            };
 
             if sets > MAX_DC_SETS {
                 error!("{} DC sets specified but max is {}", sets, MAX_DC_SETS);
@@ -203,8 +217,8 @@ impl Config {
                 line_size,
                 idx_size,
                 offset_size,
-                walloc_enabled,
-                wback_enabled,
+                write_policy,
+                write_miss_policy,
                 enabled: true,
             }
         };
@@ -215,9 +229,11 @@ impl Config {
             let line_size = opts[11].parse::<u32>()?;
             let idx_size = bits::min_repr(sets as u32) as u32;
             let offset_size = bits::min_repr(line_size as u32) as u32;
-		    let walloc_enabled = !parse_yn!(opts, 12);
-            // write-back is always with write-allocate
-            let wback_enabled = walloc_enabled; 
+		    let (write_policy, write_miss_policy) = match opts[12].as_str() {
+                "y" => (WritePolicy::WriteThrough, WriteMissPolicy::NoWriteAllocate),
+                "n" => (WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate),
+                s => error!("Field 12 (L2 write/write miss policy) must be 'y' or 'n' but was {}", s),
+            };
 
             let enabled = parse_yn!(opts, 15);
 
@@ -240,8 +256,8 @@ impl Config {
                 line_size,
                 idx_size,
                 offset_size,
-                walloc_enabled,
-                wback_enabled,
+                write_policy,
+                write_miss_policy,
                 enabled,
             }
         };
@@ -292,8 +308,8 @@ impl std::fmt::Display for Config {
         writeln!(f, "Each set contains {} entries.", self.dc.set_entries)?;
         writeln!(f, "Each line is {} bytes.", self.dc.line_size)?;
         writeln!(f, "The cache uses a {}write-allocate and write-{} policy.", 
-                if self.dc.walloc_enabled { "" } else { "no " },
-                if self.dc.wback_enabled { "back" } else { "through" })?;
+                if self.dc.write_miss_policy == WriteMissPolicy::WriteAllocate { "" } else { "no " },
+                if self.dc.write_policy == WritePolicy::WriteBack { "back" } else { "through" })?;
         writeln!(f, "Number of bits used for the index is {}.", self.dc.idx_size)?;
         writeln!(f, "Number of bits used for the offset is {}.", self.dc.offset_size)?;
         writeln!(f)?;
@@ -302,8 +318,8 @@ impl std::fmt::Display for Config {
         writeln!(f, "Each set contains {} entries.", self.l2.set_entries)?;
         writeln!(f, "Each line is {} bytes.", self.l2.line_size)?;
         writeln!(f, "The cache uses a {}write-allocate and write-{} policy.", 
-                if self.l2.walloc_enabled { "" } else { "no " },
-                if self.l2.wback_enabled { "back" } else { "through" })?;
+                if self.l2.write_miss_policy == WriteMissPolicy::WriteAllocate { "" } else { "no " },
+                if self.l2.write_policy == WritePolicy::WriteBack { "back" } else { "through" })?;
         writeln!(f, "Number of bits used for the index is {}.", self.l2.idx_size)?;
         writeln!(f, "Number of bits used for the offset is {}.", self.l2.offset_size)?;
         writeln!(f)?;
