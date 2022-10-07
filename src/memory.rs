@@ -124,6 +124,11 @@ impl Memory {
         };
 
         let dc_response = self.dc.lookup(&access_event);
+        if let Some(writeback_addr) = dc_response.writeback {
+            let writeback_event = AccessEvent::Write(writeback_addr);
+            self.l2.lookup(&writeback_event);
+        }
+
         let l2_response: Option<cache::CacheResponse> = if self.l2.config.enabled {
             match dc_response.result {
                 QueryResult::Hit => {
@@ -149,6 +154,9 @@ impl Memory {
             dc_tag: dc_response.tag,
             dc_idx: dc_response.idx,
             dc_res: Some(dc_response.result),
+            l2_tag: l2_response.as_ref().map(|r| r.tag),
+            l2_idx: l2_response.as_ref().map(|r| r.idx),
+            l2_res: l2_response.as_ref().map(|r| r.result),
             ..Default::default()
         };
 
@@ -207,7 +215,7 @@ impl std::fmt::Display for AccessResult {
     }
 }
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug)]
 /// A query to any of the cache subsystems, which can either be `Hit` or `Miss`
 pub enum QueryResult {
     Hit,

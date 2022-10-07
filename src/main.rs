@@ -21,7 +21,7 @@ pub fn trace_from_stdin(
         .filter_map(|line| line.ok());
 
     let trace_refs = lines.filter_map(|line| -> Option<(char, u32)> {
-        let (access_type_str, access_addr_str) = line.split_at(1);
+        let (access_type_str, access_addr_str) = line.split_at(2);
 
         let access_type = access_type_str.chars().next().ok_or("bad trace char");
         let access_addr = u32::from_str_radix(access_addr_str, 16);
