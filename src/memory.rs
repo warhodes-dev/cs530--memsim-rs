@@ -78,8 +78,8 @@ impl Memory {
     pub fn new(config: Config) -> Self {
         let tlb = Tlb::new(&config.tlb);
         let pt = PageTable::new(config.pt);
-        let dc = CPUCache::new(config.dc);
-        let l2 = CPUCache::new(config.l2);
+        let dc = CPUCache::new("dc", config.dc);
+        let l2 = CPUCache::new("L2", config.l2);
         let config = config.mem;
         Memory {tlb, pt, dc, l2, config}
     }
@@ -123,10 +123,12 @@ impl Memory {
             },
         };
 
-        let dc_response = self.dc.lookup(&access_event);
+        let dc_response = match access_event {
+            AccessEvent::Read(addr) => self.dc.read(addr),
+            AccessEvent::Write(addr) => self.dc.write(addr),
+        };
         if let Some(writeback_addr) = dc_response.writeback {
-            let writeback_event = AccessEvent::Write(writeback_addr);
-            self.l2.lookup(&writeback_event);
+            self.l2.write(writeback_addr);
         }
 
         let l2_response: Option<cache::CacheResponse> = if self.l2.config.enabled {
@@ -134,13 +136,16 @@ impl Memory {
                 QueryResult::Hit => {
                     // If DC has a write through policy, then we write through to L2
                     if access_event.is_write() && self.dc.config.write_policy == WriteThrough {
-                        Some(self.l2.lookup(&access_event))
+                        Some(self.l2.write(access_event.addr()))
                     } else {
                         None
                     }
                 },
                 QueryResult::Miss => {
-                    Some(self.l2.lookup(&access_event))
+                    Some( match access_event {
+                        AccessEvent::Read(addr) => self.l2.read(addr),
+                        AccessEvent::Write(addr) => self.l2.write(addr),
+                    })
                 },
             }
         } else {
