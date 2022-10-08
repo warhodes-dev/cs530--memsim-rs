@@ -123,6 +123,23 @@ impl Memory {
                 }
 
                 let pt_response = self.pt.translate(vpn);
+                if let Some(ppn) = pt_response.evicted_ppn {
+                    #[cfg(debug_assertions)]
+                    println!("ppn {:x} evicted", ppn);
+                    //self.tlb.clean_ppn(ppn);
+                    if let Some(dc_writebacks) = self.dc.clean_ppn(ppn) {
+                        for writeback in dc_writebacks {
+                            self.l2.write(writeback);
+                        }
+                    }
+                    if let Some(l2_writebacks) = self.l2.clean_ppn(ppn) {
+                        for writeback in l2_writebacks {
+                            #[cfg(debug_assertions)]
+                            println!("writing back {:x} main memory", writeback);
+                            unimplemented!()
+                        }
+                    }
+                }
                 (pt_response.ppn, page_offset)
             },
             // Address is alreaady physical, just get the ppn and page offset
@@ -138,8 +155,11 @@ impl Memory {
             AccessEvent::Write(addr) => self.dc.write(addr),
         };
         if let Some(writeback_addr) = dc_response.writeback {
-            #[cfg(debug_assertions)]
-            println!("writeback dc -> L2: {}", writeback_addr);
+            if cfg!(debug_assertions) {
+                let (dc_block_addr, _offset) = bits::split_at(writeback_addr, self.config.dc.offset_size);
+                let (tag, idx) = bits::split_at(dc_block_addr, self.config.dc.idx_size);
+                println!("writeback dc -> L2 tag: {:x} idx: {:x}", tag, idx);
+            }
             self.l2.write(writeback_addr);
         }
 
@@ -148,7 +168,7 @@ impl Memory {
                 // If DC has a write through policy, then we write through to L2
                 QueryResult::Hit if access_event.is_write() && self.config.dc.write_policy == WriteThrough => {
                     #[cfg(debug_assertions)]
-                    println!("writing through dc -> L2: {}", access_event.addr());
+                    println!("writing through dc -> L2: {:x}", access_event.addr());
                     Some(self.l2.write(access_event.addr()))
                 },
                 QueryResult::Miss => {
@@ -189,7 +209,7 @@ impl Memory {
         match id {
             1 => println!("{:?}", self.dc),
             2 => println!("{:?}", self.l2),
-            _ => println!("Invalid state ID. Yeah, the interface is bad, who cares?")
+            _ => println!("Invalid state ID.")
         }
     }
 }

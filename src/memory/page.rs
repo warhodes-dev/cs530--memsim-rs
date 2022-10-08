@@ -4,10 +4,15 @@ use crate::{
     utils::bits,
 };
 
+struct PageFault {
+    ppn: u32,
+    evicted_ppn: Option<u32>
+}
+
 pub struct PageTableResponse {
     pub vpn: u32,
     pub ppn: u32,
-    pub evicted_entry: Option<u32>,
+    pub evicted_ppn: Option<u32>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -17,13 +22,13 @@ pub struct PageTableEntry {
 }
 
 pub struct PageTable {
-    entries: LRUSet,
+    entries: LRUTable,
     config: config::PageTableConfig,
 }
 
 impl PageTable {
     pub fn new(config: config::PageTableConfig) -> Self {
-        let entries = LRUSet::new(config.physical_pages as usize);
+        let entries = LRUTable::new(config.physical_pages as usize);
         PageTable {
             entries,
             config,
@@ -34,16 +39,20 @@ impl PageTable {
     /// Can fault and cause pages to be allocated/evicted.
     pub fn translate(&mut self, vpn: u32) -> PageTableResponse {
 
-        match self.entries.lookup(vpn) {
-            Some(pte) => {
-                
-            },
+        let (vpn, ppn, evicted_ppn) = match self.entries.lookup(vpn) {
+            Some(ppn) => (vpn, ppn, None),
+            // Page fault: No page was found, so we must insert one (and optionally evict one)
             None => {
-
+                let (ppn, evicted_ppn) = self.entries.push(vpn);
+                (vpn, ppn, evicted_ppn)
             }
-        }
+        };
 
-        unimplemented!()
+        PageTableResponse {
+            vpn,
+            ppn,
+            evicted_ppn
+        }
     }
 }
 
@@ -58,32 +67,46 @@ use std::{collections::VecDeque, cell::RefCell, rc::Rc};
 //  some kind of linked hash map could be used for O(1) lookup _and_ O(1) touch. I suspect that
 //  designing that from scratch would have some serious rust shenanigans that I don't want to deal with.
 //  Also, the max set size is like, 16. Just a note for future reference.
-struct LRUSet {
+struct LRUTable {
     inner: VecDeque<PageTableEntry>,
     capacity: usize,
 }
 
-impl LRUSet {
+impl LRUTable {
     fn new(capacity: usize) -> Self {
         let inner = VecDeque::<PageTableEntry>::with_capacity(capacity);
-        LRUSet { inner, capacity }
+        LRUTable { inner, capacity }
     }
 
-    /// Push an item to the LRU Set, potentially evicting the oldest item
-    fn push(&mut self, entry: PageTableEntry) -> Option<PageTableEntry> {
-        let evicted_item = if self.inner.len() >= self.capacity {
-            self.inner.pop_back()
+    /// Push an item to the LRU Table, potentially evicting the oldest item
+    fn push(&mut self, vpn: u32) -> (u32, Option<u32>) {
+        // If table is full, evict an item
+        let (ppn, evicted_ppn) = if self.inner.len() >= self.capacity {
+            let evicted_ppn = self.inner.pop_back()
                 .map(|entry| {
                     entry.clone()
                 })
-        } else { None };
+                .expect("Failed to pop_back of deque, for some reason")
+                .ppn;
+            
+            let ppn = evicted_ppn;
+            (ppn, Some(evicted_ppn))
+        // Otherwise, allocate a new item
+        } else { 
+            let ppn = self.inner.len() as u32;
+            let evicted_ppn = None;
+            (ppn, evicted_ppn)
+        };
+
+        let entry = PageTableEntry{ vpn, ppn };
         self.inner.push_front(entry);
-        evicted_item
+
+        (ppn, evicted_ppn)
     }
 
     /// Look up an item in the LRU Set. If found, the item is 'touched' and moved to the front
     /// of the queue.
-    fn lookup(&mut self, vpn: u32) -> Option<PageTableEntry> {
+    fn lookup(&mut self, vpn: u32) -> Option<u32> {
         let item_search = self.inner
             .iter()
             .position(|entry| entry.vpn == vpn);
@@ -91,7 +114,7 @@ impl LRUSet {
         if let Some(item_idx) = item_search {
             let item = self.inner.remove(item_idx).unwrap();
             self.inner.push_front(item.clone());
-            Some(item)
+            Some(item.ppn)
         } else {
             None
         }
