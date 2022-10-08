@@ -2,10 +2,9 @@ mod page;
 mod tlb;
 mod cache;
 use crate::{
-    config::{self, Config, MemoryConfig, WriteMissPolicy::*, WritePolicy::*},
-    utils::{self, bits},
+    config::{self, Config, WritePolicy::*},
     memory::{
-        page::{PageTable, PhysicalAddr, VirtualAddr},
+        page::PageTable,
         cache::CPUCache, 
         tlb::Tlb,
     }
@@ -24,19 +23,19 @@ impl AccessEvent {
     fn from_raw(
         access_type: char, 
         addr: u32, 
-        config: &MemoryConfig
+        config: &Config
     ) -> Result<AccessEvent, Box<dyn std::error::Error>> {
         match config.address_type {
             config::AddressType::Virtual => {
-                if addr > config.max_virtual_addr {
+                if addr > config.pt.max_virtual_addr {
                     error!("virtual address {:08x} is too large (maximum size is 0x{:x})",
-                        addr, config.max_virtual_addr - 1);
+                        addr, config.pt.max_virtual_addr - 1);
                 }
             },
             config::AddressType::Physical => {
-                if addr > config.max_physical_addr {
+                if addr > config.pt.max_physical_addr {
                     error!("physical address {:08x} is too large (maximum size is 0x{:x})",
-                        addr, config.max_physical_addr - 1);
+                        addr, config.pt.max_physical_addr - 1);
                 }
             }
         }
@@ -66,21 +65,21 @@ impl AccessEvent {
 
 /// The simulated memory system.
 pub struct Memory {
+    #[allow(dead_code)]
     tlb: Tlb,
     pt: PageTable,
     dc: CPUCache,
     l2: CPUCache,
-    config: MemoryConfig,
+    config: Config,
 }
 
 impl Memory {
     /// Configures all submodules of the memory system and initializes the memory simulation object.
     pub fn new(config: Config) -> Self {
-        let tlb = Tlb::new(&config.tlb);
-        let pt = PageTable::new(config.pt);
-        let dc = CPUCache::new("dc", config.dc);
-        let l2 = CPUCache::new("L2", config.l2);
-        let config = config.mem;
+        let tlb = Tlb::new(config.tlb.clone());
+        let pt = PageTable::new(config.pt.clone());
+        let dc = CPUCache::new(config.dc.clone());
+        let l2 = CPUCache::new(config.l2.clone());
         Memory {tlb, pt, dc, l2, config}
     }
 
@@ -98,15 +97,15 @@ impl Memory {
         // Make sure addr is a reasonable size
         match self.config.address_type {
             config::AddressType::Virtual => {
-                if raw_addr > self.config.max_virtual_addr {
+                if raw_addr > self.config.pt.max_virtual_addr {
                     error!("virtual address {:08x} is too large (maximum size is 0x{:x})",
-                        raw_addr, self.config.max_virtual_addr - 1);
+                        raw_addr, self.config.pt.max_virtual_addr - 1);
                 }
             },
             config::AddressType::Physical => {
-                if raw_addr > self.config.max_physical_addr {
+                if raw_addr > self.config.pt.max_physical_addr {
                     error!("physical address {:08x} is too large (maximum size is 0x{:x})",
-                        raw_addr, self.config.max_physical_addr - 1);
+                        raw_addr, self.config.pt.max_physical_addr - 1);
                 }
             }
         }
@@ -131,11 +130,11 @@ impl Memory {
             self.l2.write(writeback_addr);
         }
 
-        let l2_response: Option<cache::CacheResponse> = if self.l2.config.enabled {
+        let l2_response: Option<cache::CacheResponse> = if self.config.l2.enabled {
             match dc_response.result {
                 QueryResult::Hit => {
                     // If DC has a write through policy, then we write through to L2
-                    if access_event.is_write() && self.dc.config.write_policy == WriteThrough {
+                    if access_event.is_write() && self.config.dc.write_policy == WriteThrough {
                         Some(self.l2.write(access_event.addr()))
                     } else {
                         None
@@ -189,12 +188,14 @@ pub struct AccessResult {
     l2_res: Option<QueryResult>,
 }
 
+ /*
 impl AccessResult { 
     /// Verifies that the memory simulation behavior is at least in accordance with the config.
     fn is_valid(&self, config: &Config) -> bool {
         todo!()
     }
 }
+*/
 
 impl std::fmt::Display for AccessResult {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {

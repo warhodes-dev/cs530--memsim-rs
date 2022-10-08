@@ -12,8 +12,7 @@ const TABLE_HEADER: &str =
      -------- ------ ---- ------ --- ---- ---- ---- ------ --- ---- ------ --- ----";
 
 /// Read the trace file in from stdin. Produces an iterator of tuples of `char` and `u32`,
-/// which can be thought of as (char_wr, addr) where char_wr is either `'r'` or `'w'` for 
-/// 'read' or 'write'.
+/// which can be thought of as ('r' | 'w', addr) 
 pub fn trace_from_stdin(
     stdin_lock: std::io::StdinLock
 ) -> Result<impl Iterator<Item = (char, u32)> + '_, Box<dyn std::error::Error>> {
@@ -42,7 +41,6 @@ fn main() {
         Err(_) => "./trace.config".to_string(),
     };
 
-    //TODO: Remove this printing last
     let config = match Config::from_file(&config_path) {
         Ok(c) => {
             println!("{}", c);
@@ -53,7 +51,8 @@ fn main() {
             return;
         }
     };
-    let addr_type = config.mem.address_type;
+
+    let addr_type = config.address_type;
 
     let mut mem = Memory::new(config);
 
@@ -67,13 +66,13 @@ fn main() {
         .expect("Error reading from stdin");
 
     println!("{} {}", addr_type.as_str(), TABLE_HEADER);
-    for trace_event in trace_reader {
-        let access_result = mem.access(trace_event.0, trace_event.1);
+    for (trace_char, trace_addr) in trace_reader {
+        let access_result = mem.access(trace_char, trace_addr);
         match access_result {
             Ok(access) => {
                 print!("{}", access);
                 #[cfg(debug_assertions)]
-                print!(" {}", trace_event.0);
+                print!(" {}", trace_char);
                 println!()
             }
             Err(e) => {

@@ -1,8 +1,13 @@
-use crate::{config, utils::bits};
+#[allow(unused_imports)]
+use crate::{
+    config,
+    utils::bits,
+    lru::LRUSet,
+};
 
 
 pub struct PageTable {
-    config: config::PageTableConfig
+    config: config::PageTableConfig,
 }
 
 impl PageTable {
@@ -26,6 +31,7 @@ pub struct PhysicalAddr {
     pub page_offset: u32,
 }
 
+#[allow(dead_code)]
 pub struct VirtualAddr {
     pub page_num: u32,
     pub page_offset: u32,

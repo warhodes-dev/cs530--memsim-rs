@@ -5,7 +5,6 @@ macro_rules! error {
         return Err(format!($($args)*).into());
     }}
 }
-pub(crate) use error;
 
 /// Helper functions for bit operations.
 pub mod bits {

@@ -71,6 +71,8 @@ pub struct TLBConfig {
 pub struct PageTableConfig { // TODO: move this to memoryconfig
     pub virtual_pages: u32,
     pub physical_pages: u32,
+    pub max_physical_addr: u32,
+    pub max_virtual_addr: u32,
     pub page_size: u32,
     pub idx_size: u32,
     pub offset_size: u32,
@@ -90,19 +92,12 @@ pub struct CacheConfig {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct MemoryConfig {
-    pub address_type: AddressType,
-    pub max_physical_addr: u32,
-    pub max_virtual_addr: u32,
-}
-
-#[derive(Copy, Clone, Debug)]
 pub struct Config {
     pub tlb: TLBConfig,
     pub pt: PageTableConfig,
     pub dc: CacheConfig,
     pub l2: CacheConfig,
-    pub mem: MemoryConfig
+    pub address_type: AddressType,
 }
 
 impl Config {
@@ -156,6 +151,8 @@ impl Config {
             let virtual_pages = opts[2].parse::<u32>()?;
             let physical_pages = opts[3].parse::<u32>()?;
             let page_size = opts[4].parse::<u32>()?;
+            let max_physical_addr = physical_pages * page_size;
+            let max_virtual_addr = virtual_pages * page_size;
             let idx_size = bits::min_repr(virtual_pages as u32) as u32;
             let offset_size = bits::min_repr(page_size as u32) as u32;
             let enabled = parse_yn!(opts, 13);
@@ -176,6 +173,8 @@ impl Config {
             PageTableConfig {
                 virtual_pages,
                 physical_pages,
+                max_virtual_addr,
+                max_physical_addr,
                 page_size,
                 idx_size,
                 offset_size,
@@ -263,28 +262,18 @@ impl Config {
         };
 
 
-        let mem_config = {
-            let address_type = match opts[13].as_str() {
-                "y" => AddressType::Virtual,
-                "n" => AddressType::Physical,
-                s => error!("Field 13 (virutal addresses enabled) must be 'y' or 'n' but was {}", s),
-            };
-            let max_physical_addr = pt_config.physical_pages * pt_config.page_size;
-            let max_virtual_addr = pt_config.virtual_pages * pt_config.page_size;
-
-            MemoryConfig {
-                address_type,
-                max_physical_addr,
-                max_virtual_addr,
-            }
+        let address_type = match opts[13].as_str() {
+            "y" => AddressType::Virtual,
+            "n" => AddressType::Physical,
+            s => error!("Field 13 (virutal addresses enabled) must be 'y' or 'n' but was {}", s),
         };
-
+            
         Ok(Config{
             tlb: tlb_config, 
             pt: pt_config, 
             dc: dc_config, 
             l2: l2_config,
-            mem: mem_config,
+            address_type,
         })
     }
 }
@@ -324,7 +313,7 @@ impl std::fmt::Display for Config {
         writeln!(f, "Number of bits used for the offset is {}.", self.l2.offset_size)?;
         writeln!(f)?;
 
-        writeln!(f, "The addresses read in are {} addresses.", self.mem.address_type.as_str().to_lowercase())?;
+        writeln!(f, "The addresses read in are {} addresses.", self.address_type.as_str().to_lowercase())?;
 
         if !self.tlb.enabled {
             writeln!(f, "TLB is disabled in this configuration.")?;
