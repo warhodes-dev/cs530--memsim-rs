@@ -67,18 +67,44 @@ fn main() {
 
     println!("{} {}", addr_type.as_str(), TABLE_HEADER);
     for (trace_char, trace_addr) in trace_reader {
-        let access_result = mem.access(trace_char, trace_addr);
-        match access_result {
-            Ok(access) => {
-                print!("{}", access);
-                #[cfg(debug_assertions)]
-                print!(" {}", trace_char);
-                println!()
+        if cfg!(debug_assertions) {
+            match trace_char {
+                'R' | 'W' => {
+                    let access_result = mem.access(trace_char, trace_addr);
+                    match access_result {
+                        Ok(access) => {
+                            print!("{}", access);
+                            #[cfg(debug_assertions)]
+                            print!(" {}", trace_char);
+                            println!()
+                        }
+                        Err(e) => {
+                            eprintln!("Invalid access: {}", e);
+                            return;
+                        }
+                    }
+                },
+                'I' => {
+                    println!("Invalidating items with PPN {}", trace_addr);
+                    mem.dbg_invalidate(trace_addr);
+                },
+                _ => {
+                    println!("Unknown Command");
+                }
             }
-            Err(e) => {
-                eprintln!("Invalid access: {}", e);
-                return;
+        } else {
+            let access_result = mem.access(trace_char, trace_addr);
+            match access_result {
+                Ok(access) => {
+                    print!("{}", access);
+                    println!()
+                }
+                Err(e) => {
+                    eprintln!("Invalid access: {}", e);
+                    return;
+                }
             }
         }
+        
     }
 }

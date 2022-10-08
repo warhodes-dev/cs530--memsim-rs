@@ -64,6 +64,7 @@ impl AccessEvent {
 }
 
 /// The simulated memory system.
+#[derive(Debug)]
 pub struct Memory {
     #[allow(dead_code)]
     tlb: Tlb,
@@ -78,8 +79,8 @@ impl Memory {
     pub fn new(config: Config) -> Self {
         let tlb = Tlb::new(config.tlb.clone());
         let pt = PageTable::new(config.pt.clone());
-        let dc = CPUCache::new(config.dc.clone());
-        let l2 = CPUCache::new(config.l2.clone());
+        let dc = CPUCache::new(config.dc.clone(), config.clone());
+        let l2 = CPUCache::new(config.l2.clone(), config.clone());
         Memory {tlb, pt, dc, l2, config}
     }
 
@@ -89,9 +90,6 @@ impl Memory {
         raw_access_type: char, 
         raw_addr: u32
     ) -> Result<AccessResult, Box<dyn std::error::Error>> {
-        //translate to phys first...
-        // check tlb
-        // by the way, study performance equations
         let access_event = AccessEvent::from_raw(raw_access_type, raw_addr, &self.config)?;
 
         // Make sure addr is a reasonable size
@@ -127,18 +125,16 @@ impl Memory {
             AccessEvent::Write(addr) => self.dc.write(addr),
         };
         if let Some(writeback_addr) = dc_response.writeback {
+            #[cfg(debug_assertions)]
+            println!("writeback dc -> L2: {}", writeback_addr);
             self.l2.write(writeback_addr);
         }
 
         let l2_response: Option<cache::CacheResponse> = if self.config.l2.enabled {
             match dc_response.result {
-                QueryResult::Hit => {
-                    // If DC has a write through policy, then we write through to L2
-                    if access_event.is_write() && self.config.dc.write_policy == WriteThrough {
-                        Some(self.l2.write(access_event.addr()))
-                    } else {
-                        None
-                    }
+                // If DC has a write through policy, then we write through to L2
+                QueryResult::Hit if access_event.is_write() && self.config.dc.write_policy == WriteThrough => {
+                    Some(self.l2.write(access_event.addr()))
                 },
                 QueryResult::Miss => {
                     Some( match access_event {
@@ -146,6 +142,7 @@ impl Memory {
                         AccessEvent::Write(addr) => self.l2.write(addr),
                     })
                 },
+                _ => None,
             }
         } else {
             None
@@ -165,6 +162,11 @@ impl Memory {
         };
 
         Ok(event)
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn dbg_invalidate(&mut self, ppn: u32) {
+        let writebacks = self.dc.clean_ppn(ppn);
     }
 }
 
