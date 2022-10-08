@@ -36,7 +36,7 @@ pub struct CPUCache {
 
 impl CPUCache {
     pub fn new(config: config::CacheConfig, global_config: config::Config) -> Self {
-        let empty_set = LRUSet::new(config.set_entries as usize);
+        let empty_set = LRUSet::new(config.set_entries as usize, config.id);
         let sets = vec![ empty_set ; config.sets as usize ];
         CPUCache { 
             sets,
@@ -67,11 +67,13 @@ impl CPUCache {
                     dirty: false,
                 };
                 let evicted_block = set.push(new_entry);
+                /*
                 if cfg!(debug_assertions) { //TODO: remove
                     if let Some(eblock) = evicted_block {
-                        println!("block with addr {:x} evicted during write to L{}", eblock.addr, self.config.id);
+                        println!("block with addr {:x} evicted during read to L{}", eblock.addr, self.config.id);
                     }
                 }
+                */
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
@@ -116,11 +118,13 @@ impl CPUCache {
                     dirty: false,
                 };
                 let evicted_block = set.push(new_entry);
+                /*
                 if cfg!(debug_assertions) { //TODO: remove
                     if let Some(eblock) = evicted_block {
                         println!("block with addr {:x} evicted during write to L{}", eblock.addr, self.config.id);
                     }
                 }
+                */
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
@@ -148,13 +152,6 @@ impl CPUCache {
         }
         (!writebacks.is_empty()).then_some(writebacks)
     }
-
-    /*
-    /// Unconditionally inserts an entry into its corresponding set.
-    pub fn writeback(&mut self, addr: u32) {
-        unimplemented!()
-    }
-    */
 }
 
 /* === LRU Set === */
@@ -171,12 +168,13 @@ use std::{collections::VecDeque, cell::RefCell, rc::Rc};
 struct LRUSet {
     inner: VecDeque<Rc<RefCell<CacheEntry>>>,
     capacity: usize,
+    id: u8,
 }
 
 impl LRUSet {
-    fn new(capacity: usize) -> Self {
+    fn new(capacity: usize, id: u8) -> Self {
         let inner = VecDeque::<Rc<RefCell<CacheEntry>>>::with_capacity(capacity);
-        LRUSet { inner, capacity }
+        LRUSet { inner, capacity, id }
     }
 
     /// Push an item to the LRU Set, potentially evicting the oldest item
@@ -217,6 +215,8 @@ impl LRUSet {
             // filter out invalid entries and push them to writebacks if dirty
             .filter_map(|entry| {
                 if entry.borrow().ppn == ppn {
+                    #[cfg(debug_assertions)]
+                    println!("entry {} in L{} is invalidated due to ppn {} being evicted", entry.borrow().addr, self.id, ppn);
                     if entry.borrow().is_dirty() {
                         writebacks.push(entry.borrow().addr);
                     }
