@@ -28,7 +28,6 @@ impl CacheEntry {
     }
 }
 
-#[derive(Debug)]
 pub struct CPUCache {
     sets: Vec<LRUSet>,
     config: config::CacheConfig,
@@ -68,6 +67,11 @@ impl CPUCache {
                     dirty: false,
                 };
                 let evicted_block = set.push(new_entry);
+                if cfg!(debug_assertions) { //TODO: remove
+                    if let Some(eblock) = evicted_block {
+                        println!("block with addr {:x} evicted during write to L{}", eblock.addr, self.config.id);
+                    }
+                }
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
@@ -101,24 +105,28 @@ impl CPUCache {
                 (QueryResult::Hit, None)
             },
             // No block found: Miss
+            None if self.config.write_miss_policy == NoWriteAllocate => {
+                (QueryResult::Miss, None)
+            },
             None => {
-                if self.config.write_miss_policy == NoWriteAllocate {
-                    (QueryResult::Miss, None)
-                } else {
-                    let new_entry = CacheEntry {
-                        tag,
-                        addr,
-                        ppn,
-                        dirty: false,
-                    };
-                    let evicted_block = set.push(new_entry);
-                    let writeback = evicted_block
-                        .filter(|block| {
-                            block.is_dirty()
-                        })
-                        .map(|block| block.addr);
-                    (QueryResult::Miss, writeback)
+                let new_entry = CacheEntry {
+                    tag,
+                    addr,
+                    ppn,
+                    dirty: false,
+                };
+                let evicted_block = set.push(new_entry);
+                if cfg!(debug_assertions) { //TODO: remove
+                    if let Some(eblock) = evicted_block {
+                        println!("block with addr {:x} evicted during write to L{}", eblock.addr, self.config.id);
+                    }
                 }
+                let writeback = evicted_block
+                    .filter(|block| {
+                        block.is_dirty()
+                    })
+                    .map(|block| block.addr);
+                (QueryResult::Miss, writeback)
             },
         };
 
@@ -228,5 +236,20 @@ impl LRUSet {
 
         // Return the writebacks
         (!writebacks.is_empty()).then_some(writebacks)
+    }
+}
+
+impl std::fmt::Debug for CPUCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "L{} Cache:", self.config.id)?;
+        for (idx, set) in self.sets.iter().enumerate() {
+            writeln!(f, "\tSet {:x}:", idx)?;
+            for entry in set.inner.iter() {
+                let e = entry.borrow();
+                writeln!(f, "\t\taddr: {:x}\n\t\ttag: {:x}\n\t\tppn: {:x}\n\t\tdirty: {}",
+                    e.addr, e.tag, e.ppn, if e.dirty { "yes" } else { "no" })?;
+            }
+        }
+        Ok(())
     }
 }

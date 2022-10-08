@@ -7,7 +7,7 @@ use crate::{
         page::PageTable,
         cache::CPUCache, 
         tlb::Tlb,
-    }
+    }, utils::bits
 };
 
 /// Represents the input access events.
@@ -90,7 +90,6 @@ impl Memory {
         raw_access_type: char, 
         raw_addr: u32
     ) -> Result<AccessResult, Box<dyn std::error::Error>> {
-        let access_event = AccessEvent::from_raw(raw_access_type, raw_addr, &self.config)?;
 
         // Make sure addr is a reasonable size
         match self.config.address_type {
@@ -108,17 +107,31 @@ impl Memory {
             }
         }
 
+        let access_event = AccessEvent::from_raw(raw_access_type, raw_addr, &self.config)?;
+
+        /* Step 1: Translate virtual address to physical address */
+
         let (physical_page_num, page_offset) = match self.config.address_type {
+            // Convert virtual address to physical address as ppn and page offset
             config::AddressType::Virtual => {
-                //let (vpn, offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
-                //let (_tag, ppn) = self.tlb.lookup(vpn as usize);
-                unimplemented!()
+                let (vpn, page_offset) = bits::split_at(access_event.addr(), self.config.pt.offset_size);
+
+                if self.config.tlb.enabled {
+                    //let (_tag, ppn) = self.tlb.lookup(vpn as usize);
+                    //early return from block with translation
+                    unimplemented!()
+                }
+
+                let pt_response = self.pt.translate(vpn);
+                (pt_response.ppn, page_offset)
             },
+            // Address is alreaady physical, just get the ppn and page offset
             config::AddressType::Physical => {
-                let phys_addr = self.pt.passthrough(raw_addr); // TODO: I don't like this
-                (phys_addr.page_num, phys_addr.page_offset)
+                bits::split_at(access_event.addr(), self.config.pt.offset_size)
             },
         };
+
+        /* Step 2: Try to access data in caches in the order of DC -> L2 -> Memory */
 
         let dc_response = match access_event {
             AccessEvent::Read(addr) => self.dc.read(addr),
@@ -134,6 +147,8 @@ impl Memory {
             match dc_response.result {
                 // If DC has a write through policy, then we write through to L2
                 QueryResult::Hit if access_event.is_write() && self.config.dc.write_policy == WriteThrough => {
+                    #[cfg(debug_assertions)]
+                    println!("writing through dc -> L2: {}", access_event.addr());
                     Some(self.l2.write(access_event.addr()))
                 },
                 QueryResult::Miss => {
@@ -167,6 +182,15 @@ impl Memory {
     #[cfg(debug_assertions)]
     pub fn dbg_invalidate(&mut self, ppn: u32) {
         let writebacks = self.dc.clean_ppn(ppn);
+    }
+
+    #[cfg(debug_assertions)]
+    pub fn dbg_print_state(&self, id: u32) {
+        match id {
+            1 => println!("{:?}", self.dc),
+            2 => println!("{:?}", self.l2),
+            _ => println!("Invalid state ID. Yeah, the interface is bad, who cares?")
+        }
     }
 }
 

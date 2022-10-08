@@ -86,8 +86,13 @@ fn main() {
                 },
                 'I' => {
                     println!("Invalidating items with PPN {}", trace_addr);
+                    #[cfg(debug_assertions)]
                     mem.dbg_invalidate(trace_addr);
                 },
+                'P' => {
+                    #[cfg(debug_assertions)]
+                    mem.dbg_print_state(trace_addr);
+                }
                 _ => {
                     println!("Unknown Command");
                 }

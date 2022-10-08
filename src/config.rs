@@ -89,6 +89,9 @@ pub struct CacheConfig {
     pub write_miss_policy: WriteMissPolicy,
     pub write_policy: WritePolicy,
     pub enabled: bool,
+
+    // TODO: Remove this; This is either a 1 or 2 for L1 vs L2. For debugging
+    pub id: u8,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -219,6 +222,7 @@ impl Config {
                 write_policy,
                 write_miss_policy,
                 enabled: true,
+                id: 1,
             }
         };
 
@@ -258,6 +262,7 @@ impl Config {
                 write_policy,
                 write_miss_policy,
                 enabled,
+                id: 2,
             }
         };
 
