@@ -1,4 +1,17 @@
-use crate::config;
+use crate::{
+    config,
+    utils::bits,
+    memory::QueryResult,
+};
+
+
+pub struct TLBResponse {
+    pub vpn: u32,
+    pub tag: u32,
+    pub idx: u32,
+    pub result: QueryResult,
+    pub ppn: Option<u32>,
+}
 
 #[derive(Debug, Copy, Clone)]
 pub struct TLBEntry {
@@ -28,6 +41,31 @@ impl TLB {
         let sets = vec![ empty_set ; config.sets as usize ];
         TLB { sets, config, }
     }
+
+    /// Looks up vpn in TLB for a fast translation.
+    pub fn lookup(&mut self, vpn: u32) -> TLBResponse {
+        let (tag, idx) = bits::split_at(vpn, self.config.idx_size);
+
+        let set = &mut self.sets[idx as usize];
+
+        let (ppn, result) = match set.lookup(tag) {
+            Some(entry) => (Some(entry.ppn), QueryResult::Hit),
+            None => (None, QueryResult::Miss),
+        };
+
+        TLBResponse { 
+            vpn,
+            tag, 
+            idx, 
+            ppn,
+            result,
+        }
+    }
+
+    /// Add a vpn-ppn translation to the TLB
+    pub fn push(&mut self, vpn: u32, ppn: u32) {
+        unimplemented!()
+    }
 }
 
 /* === LRU Set === */
@@ -45,13 +83,13 @@ use std::{collections::VecDeque, cell::RefCell, rc::Rc};
 //  Also, the max set size is like, 16. Just a note for future reference.
 #[derive(Clone, Debug)]
 struct LRUSet {
-    inner: VecDeque<Rc<RefCell<TLBEntry>>>,
+    inner: VecDeque<TLBEntry>,
     capacity: usize,
 }
 
 impl LRUSet {
     fn new(capacity: usize) -> Self {
-        let inner = VecDeque::<Rc<RefCell<TLBEntry>>>::with_capacity(capacity);
+        let inner = VecDeque::<TLBEntry>::with_capacity(capacity);
         LRUSet { inner, capacity }
     }
 
@@ -59,20 +97,17 @@ impl LRUSet {
     fn push(&mut self, entry: TLBEntry) -> Option<TLBEntry> {
         let evicted_item = if self.inner.len() >= self.capacity {
             self.inner.pop_back()
-                .map(|entry| {
-                    entry.borrow().clone()
-                })
         } else { None };
-        self.inner.push_front(Rc::new(RefCell::new(entry)));
+        self.inner.push_front(entry);
         evicted_item
     }
 
     /// Look up an item in the LRU Set. If found, the item is 'touched' and moved to the front
     /// of the queue.
-    fn lookup(&mut self, tag: u32) -> Option<Rc<RefCell<TLBEntry>>> {
+    fn lookup(&mut self, tag: u32) -> Option<TLBEntry> {
         let item_search = self.inner
             .iter()
-            .position(|entry| entry.borrow().tag == tag );
+            .position(|entry| entry.tag == tag );
         
         if let Some(item_idx) = item_search {
             let item = self.inner.remove(item_idx).unwrap();
@@ -83,37 +118,19 @@ impl LRUSet {
         }
     }
 
-    /// Evicts any entry that corresponds to the supplied ppn. Returns a list of writebacks
-    fn invalidate_entries(&mut self, ppn: u32) -> Option<Vec<u32>> {
-        let mut writebacks = Vec::new();
-
-        // Copy the entires LRU set (I know) removing the invalid entries
+    /// Evicts any entry that corresponds to the supplied ppn.
+    fn invalidate_entries(&mut self, ppn: u32) {
+        // Copy the entires LRU set, removing the invalid entries
         let new_inner = self.inner
             .iter()
             // filter out invalid entries and push them to writebacks if dirty
-            .filter_map(|entry| {
-                if entry.borrow().ppn == ppn {
-                    #[cfg(debug_assertions)]
-                    println!("entry {} in TLB is invalidated due to ppn {} being evicted", entry.borrow().addr, ppn);
-                    if entry.borrow().is_dirty() {
-                        writebacks.push(entry.borrow().addr);
-                    }
-                    None
-                } else {
-                    Some(entry.borrow().clone())
-                }
-            })
+            .filter(|entry| entry.ppn == ppn)
             // take raw entries and box them up for shipping
-            .map(|raw_entry| {
-                Rc::new(RefCell::new(raw_entry))
-            })
+            .map(|entry| entry.clone())
             .collect();
         
         // Set the LRUSet's inner to be the filtered set
         self.inner = new_inner;
-
-        // Return the writebacks
-        (!writebacks.is_empty()).then_some(writebacks)
     }
 }
 
@@ -122,8 +139,7 @@ impl std::fmt::Debug for TLB {
         writeln!(f, "TLB:")?;
         for (idx, set) in self.sets.iter().enumerate() {
             writeln!(f, "\tSet {:x}:", idx)?;
-            for entry in set.inner.iter() {
-                let e = entry.borrow();
+            for e in set.inner.iter() {
                 writeln!(f, "\t\taddr: {:x}\n\t\ttag: {:x}\n\t\tppn: {:x}\n\t\tdirty: {}",
                     e.addr, e.tag, e.ppn, if e.is_dirty() { "yes" } else { "no" })?;
             }

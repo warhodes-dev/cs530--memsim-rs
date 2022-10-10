@@ -5,7 +5,16 @@ cargo build --release
 
 memsim="./target/release/memsim-rs"
 
-for idx in {0..100};
+if [ -z "$1" ];
+then
+    start=0
+else
+    start=$1
+fi
+
+end=80
+
+for idx in $(eval echo "{$start..$end}");
 do
     cfgid_raw=$(($idx / 10))
     printf -v cfgid "%02d" $cfgid_raw

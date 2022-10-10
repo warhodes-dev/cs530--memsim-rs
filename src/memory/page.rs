@@ -11,9 +11,10 @@ struct PageFault {
 }
 
 pub struct PageTableResponse {
-    pub vpn: u32,
+    pub vpn: Option<u32>,
     pub ppn: u32,
-    pub res: QueryResult,
+    pub page_offset: u32,
+    pub res: Option<QueryResult>,
     pub evicted_ppn: Option<u32>,
 }
 
@@ -36,18 +37,44 @@ impl PageTable {
 
     /// Translates a virtual page number to a physical page number. 
     /// Can fault and cause pages to be allocated/evicted.
-    pub fn translate(&mut self, vpn: u32) -> PageTableResponse {
+    pub fn translate(&mut self, addr: u32) -> PageTableResponse {
+        let (vpn, page_offset) = bits::split_at(addr, self.config.offset_size);
+
         match self.entries.lookup(vpn) {
             Some(ppn) => {
                 let res = QueryResult::Hit;
-                PageTableResponse { vpn, ppn, res, evicted_ppn: None }
+                PageTableResponse { 
+                    vpn: Some(vpn),
+                    ppn,
+                    page_offset,
+                    res: Some(res), 
+                    evicted_ppn: None 
+                }
             },
             // Page fault: No page was found, so we must insert one (and optionally evict one)
             None => {
                 let res = QueryResult::Miss;
                 let (ppn, evicted_ppn) = self.entries.push(vpn);
-                PageTableResponse { vpn, ppn, res, evicted_ppn }
+                PageTableResponse { 
+                    vpn: Some(vpn),
+                    ppn,
+                    page_offset,
+                    res: Some(res),
+                    evicted_ppn 
+                }
             }
+        }
+    }
+
+    /// Simply converts an addr into a ppn and offset based on config (no translation)
+    pub fn passthough(&self, addr: u32) -> PageTableResponse {
+        let (ppn, page_offset) = bits::split_at(addr, self.config.offset_size);
+        PageTableResponse {
+            vpn: None,
+            ppn,
+            page_offset,
+            res: None,
+            evicted_ppn: None,
         }
     }
 }

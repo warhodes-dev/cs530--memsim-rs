@@ -4,11 +4,19 @@ mod cache;
 use crate::{
     config::{self, Config, WritePolicy::*},
     memory::{
-        page::PageTable,
-        cache::CPUCache, 
-        tlb::TLB,
+        page::{PageTable, PageTableResponse},
+        cache::{CPUCache, CacheResponse}, 
+        tlb::{TLB,TLBResponse},
     }, utils::bits
 };
+
+struct TranslationResponse {
+    vpn: Option<u32>,
+    ppn: u32,
+    page_offset: u32,
+    page_table_res: Option<QueryResult>,
+    tlb_response: Option<TLBResponse>,
+}
 
 /// Represents the input access events.
 /// 
@@ -73,7 +81,7 @@ impl Memory {
         &mut self, 
         raw_access_type: char, 
         raw_addr: u32
-    ) -> Result<AccessResult, Box<dyn std::error::Error>> {
+    ) -> Result<MemoryResponse, Box<dyn std::error::Error>> {
 
         // Make sure addr is a reasonable size
         match self.config.address_type {
@@ -93,51 +101,77 @@ impl Memory {
 
         /* Step 1: Translate virtual address to physical address */
 
-        let (
-            virtual_page_num, 
-            physical_page_num, 
-            page_offset, 
-            page_table_res
-        ) = match self.config.address_type {
+        let (_, page_offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
+        let (pt_response, tlb_response) = match self.config.address_type {
             // Address is alreaady physical, just get the ppn and page offset
             config::AddressType::Physical => {
-                let (ppn, page_offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
-                (None, ppn, page_offset, None)
+                let pt_response = self.pt.passthough(raw_addr);
+                (Some(pt_response), None)
             },
             // Convert virtual address to physical address as ppn and page offset
             config::AddressType::Virtual => {
-                let (vpn, page_offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
+                let (vpn, _) = bits::split_at(raw_addr, self.config.pt.offset_size);
 
-                if self.config.tlb.enabled {
-                    //let (_tag, ppn) = self.tlb.lookup(vpn as usize);
-                    //early return from block with translation
-                    unimplemented!()
-                }
+                let tlb_response = if self.config.tlb.enabled {
+                    Some(self.tlb.lookup(vpn))
+                } else {
+                    None
+                };
 
-                let pt_response = self.pt.translate(vpn);
-                if let Some(evicted_ppn) = pt_response.evicted_ppn {
-                    #[cfg(debug_assertions)]
-                    println!("ppn {:x} evicted", evicted_ppn);
-                    //self.tlb.clean_ppn(ppn);
-                    if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
-                        for writeback in dc_writebacks {
-                            self.l2.write(writeback);
+                let pt_response = if tlb_response.is_some() 
+                    && tlb_response.unwrap().result == QueryResult::Miss {
+
+                    let pt_response = self.pt.translate(vpn);
+
+                    // If a PTE got evicted, invalidate all corresponding entries
+                    if let Some(evicted_ppn) = pt_response.evicted_ppn {
+                        #[cfg(debug_assertions)]
+                        println!("ppn {:x} evicted", evicted_ppn);
+                        //self.tlb.clean_ppn(ppn);
+                        if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
+                            for writeback in dc_writebacks {
+                                self.l2.write(writeback);
+                            }
+                        }
+                        if let Some(l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
+                            for writeback in l2_writebacks {
+                                #[cfg(debug_assertions)]
+                                println!("writing back {:x} main memory", writeback);
+                                //TODO: touch TLB and PTE entries!!!
+                            }
                         }
                     }
-                    if let Some(l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
-                        for writeback in l2_writebacks {
-                            #[cfg(debug_assertions)]
-                            println!("writing back {:x} main memory", writeback);
-                            //TODO: touch TLB and PTE entries!!!
-                        }
-                    }
-                }
-                (Some(vpn), pt_response.ppn, page_offset, Some(pt_response.res))
+                    Some(pt_response)
+                } else {
+                    None
+                };
+                (pt_response, tlb_response)
             },
         };
 
+        // This shit is seriously heinous, try again
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        //
+        let ppn = tlb_response.map_or(pt_response.unwrap().ppn, |tlb_r| tlb_r.ppn);
+
         // create the physical addr from the ppn and page offset
-        let physical_addr = bits::join_at(physical_page_num, page_offset, self.config.pt.offset_size);
+        let physical_addr = bits::join_at(ppn, page_offset, self.config.pt.offset_size);
         let access_event = AccessEvent::from_raw(raw_access_type, physical_addr)?;
 
         /* Step 2: Try to access data in caches in the order of DC -> L2 -> Memory */
@@ -175,11 +209,11 @@ impl Memory {
             None
         };
 
-        let event = AccessResult {
+        let mem_response = MemoryResponse {
             addr: raw_addr,
             page_offset,
-            virtual_page_num,
-            physical_page_num,
+            vpn,
+            ppn,
             page_table_res,
             dc_tag: dc_response.tag,
             dc_idx: dc_response.idx,
@@ -190,7 +224,7 @@ impl Memory {
             ..Default::default()
         };
 
-        Ok(event)
+        Ok(mem_response)
     }
 
     #[cfg(debug_assertions)]
@@ -210,15 +244,15 @@ impl Memory {
 
 /// Details the interior behavior of a simulated access to the memory system.
 #[derive(Default)]
-pub struct AccessResult {
+pub struct MemoryResponse {
     addr: u32,
-    virtual_page_num: Option<u32>,
+    vpn: Option<u32>,
+    ppn: u32,
     page_offset: u32,
     tlb_tag: Option<u32>,
     tlb_idx: Option<u32>,
     tlb_res: Option<QueryResult>,
     page_table_res: Option<QueryResult>,
-    physical_page_num: u32,
 
     dc_tag: u32,
     dc_idx: u32,
@@ -229,7 +263,7 @@ pub struct AccessResult {
 }
 
  /*
-impl AccessResult { 
+impl MemoryResponse { 
     /// Verifies that the memory simulation behavior is at least in accordance with the config.
     fn is_valid(&self, config: &Config) -> bool {
         todo!()
@@ -237,20 +271,20 @@ impl AccessResult {
 }
 */
 
-impl std::fmt::Display for AccessResult {
+impl std::fmt::Display for MemoryResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
         write!(f, 
             //addr  pg # pgoff tbtg tbix tlbr ptrs phypg dctag dcidx dcrs l2tg l2ix l2rs
             "{:08x} {:6} {:4x} {:6} {:3} {:4} {:4} {:4x} {:6x} {:3x} {:4} {:6} {:3} {:4}",
 
             self.addr,
-            self.virtual_page_num.map_or("".to_string(), |n| format!("{:6x}", n)),
+            self.vpn.map_or("".to_string(), |n| format!("{:6x}", n)),
             self.page_offset,
             self.tlb_tag.map_or("".to_string(), |n| format!("{:6x}", n)),
             self.tlb_idx.map_or("".to_string(), |n| format!("{:3x}", n)),
             self.tlb_res.as_ref().map_or("", |q| q.as_str()),
             self.page_table_res.as_ref().map_or("", |q| q.as_str()),
-            self.physical_page_num,
+            self.ppn,
             self.dc_tag,
             self.dc_idx,
             self.dc_res.as_ref().map_or("", |q| q.as_str()),

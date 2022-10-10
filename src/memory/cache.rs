@@ -63,13 +63,13 @@ impl CPUCache {
                     dirty: false,
                 };
                 let evicted_block = set.push(new_entry);
-                /*
+
                 if cfg!(debug_assertions) { //TODO: remove
                     if let Some(eblock) = evicted_block {
                         println!("block with addr {:x} evicted during read to L{}", eblock.addr, self.config.id);
                     }
                 }
-                */
+
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
@@ -114,13 +114,13 @@ impl CPUCache {
                     dirty: true,
                 };
                 let evicted_block = set.push(new_entry);
-                /*
+
                 if cfg!(debug_assertions) { //TODO: remove
                     if let Some(eblock) = evicted_block {
                         println!("block with addr {:x} evicted during write to L{}", eblock.addr, self.config.id);
                     }
                 }
-                */
+
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
@@ -205,17 +205,20 @@ impl LRUSet {
     fn invalidate_entries(&mut self, ppn: u32) -> Option<Vec<u32>> {
         let mut writebacks = Vec::new();
 
-        // Copy the entires LRU set (I know) removing the invalid entries
+        // Copy the entire LRU set without the invalid entries
         let new_inner = self.inner
             .iter()
             // filter out invalid entries and push them to writebacks if dirty
             .filter_map(|entry| {
                 if entry.borrow().ppn == ppn {
+
                     #[cfg(debug_assertions)]
                     println!("entry {} in L{} is invalidated due to ppn {} being evicted", entry.borrow().addr, self.id, ppn);
+
                     if entry.borrow().is_dirty() {
                         writebacks.push(entry.borrow().addr);
                     }
+
                     None
                 } else {
                     Some(entry.borrow().clone())
@@ -228,6 +231,7 @@ impl LRUSet {
             .collect();
         
         // Set the LRUSet's inner to be the filtered set
+        // -- This drops the old inner completely.
         self.inner = new_inner;
 
         // Return the writebacks
