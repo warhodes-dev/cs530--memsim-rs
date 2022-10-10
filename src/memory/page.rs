@@ -2,6 +2,7 @@
 use crate::{
     config,
     utils::bits,
+    memory::QueryResult,
 };
 
 struct PageFault {
@@ -12,6 +13,7 @@ struct PageFault {
 pub struct PageTableResponse {
     pub vpn: u32,
     pub ppn: u32,
+    pub res: QueryResult,
     pub evicted_ppn: Option<u32>,
 }
 
@@ -29,29 +31,23 @@ pub struct PageTable {
 impl PageTable {
     pub fn new(config: config::PageTableConfig) -> Self {
         let entries = LRUTable::new(config.physical_pages as usize);
-        PageTable {
-            entries,
-            config,
-        }
+        PageTable { entries, config, }
     }
 
     /// Translates a virtual page number to a physical page number. 
     /// Can fault and cause pages to be allocated/evicted.
     pub fn translate(&mut self, vpn: u32) -> PageTableResponse {
-
-        let (vpn, ppn, evicted_ppn) = match self.entries.lookup(vpn) {
-            Some(ppn) => (vpn, ppn, None),
+        match self.entries.lookup(vpn) {
+            Some(ppn) => {
+                let res = QueryResult::Hit;
+                PageTableResponse { vpn, ppn, res, evicted_ppn: None }
+            },
             // Page fault: No page was found, so we must insert one (and optionally evict one)
             None => {
+                let res = QueryResult::Miss;
                 let (ppn, evicted_ppn) = self.entries.push(vpn);
-                (vpn, ppn, evicted_ppn)
+                PageTableResponse { vpn, ppn, res, evicted_ppn }
             }
-        };
-
-        PageTableResponse {
-            vpn,
-            ppn,
-            evicted_ppn
         }
     }
 }

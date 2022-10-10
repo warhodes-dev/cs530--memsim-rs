@@ -38,11 +38,7 @@ impl CPUCache {
     pub fn new(config: config::CacheConfig, global_config: config::Config) -> Self {
         let empty_set = LRUSet::new(config.set_entries as usize, config.id);
         let sets = vec![ empty_set ; config.sets as usize ];
-        CPUCache { 
-            sets,
-            config,
-            global_config,
-        }
+        CPUCache { sets, config, global_config, }
     }
 
     /// Performs a read access to the cache
@@ -115,7 +111,7 @@ impl CPUCache {
                     tag,
                     addr,
                     ppn,
-                    dirty: false,
+                    dirty: true,
                 };
                 let evicted_block = set.push(new_entry);
                 /*
@@ -247,7 +243,7 @@ impl std::fmt::Debug for CPUCache {
             for entry in set.inner.iter() {
                 let e = entry.borrow();
                 writeln!(f, "\t\taddr: {:x}\n\t\ttag: {:x}\n\t\tppn: {:x}\n\t\tdirty: {}",
-                    e.addr, e.tag, e.ppn, if e.dirty { "yes" } else { "no" })?;
+                    e.addr, e.tag, e.ppn, if e.is_dirty() { "yes" } else { "no" })?;
             }
         }
         Ok(())

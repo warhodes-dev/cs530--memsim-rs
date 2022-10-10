@@ -6,7 +6,7 @@ use crate::{
     memory::{
         page::PageTable,
         cache::CPUCache, 
-        tlb::Tlb,
+        tlb::TLB,
     }, utils::bits
 };
 
@@ -23,23 +23,7 @@ impl AccessEvent {
     fn from_raw(
         access_type: char, 
         addr: u32, 
-        config: &Config
     ) -> Result<AccessEvent, Box<dyn std::error::Error>> {
-        match config.address_type {
-            config::AddressType::Virtual => {
-                if addr > config.pt.max_virtual_addr {
-                    error!("virtual address {:08x} is too large (maximum size is 0x{:x})",
-                        addr, config.pt.max_virtual_addr - 1);
-                }
-            },
-            config::AddressType::Physical => {
-                if addr > config.pt.max_physical_addr {
-                    error!("physical address {:08x} is too large (maximum size is 0x{:x})",
-                        addr, config.pt.max_physical_addr - 1);
-                }
-            }
-        }
-
         let access_event = match access_type {
             'r' | 'R' => AccessEvent::Read(addr),
             'w' | 'W' => AccessEvent::Write(addr),
@@ -67,7 +51,7 @@ impl AccessEvent {
 #[derive(Debug)]
 pub struct Memory {
     #[allow(dead_code)]
-    tlb: Tlb,
+    tlb: TLB,
     pt: PageTable,
     dc: CPUCache,
     l2: CPUCache,
@@ -77,7 +61,7 @@ pub struct Memory {
 impl Memory {
     /// Configures all submodules of the memory system and initializes the memory simulation object.
     pub fn new(config: Config) -> Self {
-        let tlb = Tlb::new(config.tlb.clone());
+        let tlb = TLB::new(config.tlb.clone());
         let pt = PageTable::new(config.pt.clone());
         let dc = CPUCache::new(config.dc.clone(), config.clone());
         let l2 = CPUCache::new(config.l2.clone(), config.clone());
@@ -107,14 +91,22 @@ impl Memory {
             }
         }
 
-        let access_event = AccessEvent::from_raw(raw_access_type, raw_addr, &self.config)?;
-
         /* Step 1: Translate virtual address to physical address */
 
-        let (physical_page_num, page_offset) = match self.config.address_type {
+        let (
+            virtual_page_num, 
+            physical_page_num, 
+            page_offset, 
+            page_table_res
+        ) = match self.config.address_type {
+            // Address is alreaady physical, just get the ppn and page offset
+            config::AddressType::Physical => {
+                let (ppn, page_offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
+                (None, ppn, page_offset, None)
+            },
             // Convert virtual address to physical address as ppn and page offset
             config::AddressType::Virtual => {
-                let (vpn, page_offset) = bits::split_at(access_event.addr(), self.config.pt.offset_size);
+                let (vpn, page_offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
 
                 if self.config.tlb.enabled {
                     //let (_tag, ppn) = self.tlb.lookup(vpn as usize);
@@ -123,30 +115,30 @@ impl Memory {
                 }
 
                 let pt_response = self.pt.translate(vpn);
-                if let Some(ppn) = pt_response.evicted_ppn {
+                if let Some(evicted_ppn) = pt_response.evicted_ppn {
                     #[cfg(debug_assertions)]
-                    println!("ppn {:x} evicted", ppn);
+                    println!("ppn {:x} evicted", evicted_ppn);
                     //self.tlb.clean_ppn(ppn);
-                    if let Some(dc_writebacks) = self.dc.clean_ppn(ppn) {
+                    if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
                         for writeback in dc_writebacks {
                             self.l2.write(writeback);
                         }
                     }
-                    if let Some(l2_writebacks) = self.l2.clean_ppn(ppn) {
+                    if let Some(l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
                         for writeback in l2_writebacks {
                             #[cfg(debug_assertions)]
                             println!("writing back {:x} main memory", writeback);
-                            unimplemented!()
+                            //TODO: touch TLB and PTE entries!!!
                         }
                     }
                 }
-                (pt_response.ppn, page_offset)
-            },
-            // Address is alreaady physical, just get the ppn and page offset
-            config::AddressType::Physical => {
-                bits::split_at(access_event.addr(), self.config.pt.offset_size)
+                (Some(vpn), pt_response.ppn, page_offset, Some(pt_response.res))
             },
         };
+
+        // create the physical addr from the ppn and page offset
+        let physical_addr = bits::join_at(physical_page_num, page_offset, self.config.pt.offset_size);
+        let access_event = AccessEvent::from_raw(raw_access_type, physical_addr)?;
 
         /* Step 2: Try to access data in caches in the order of DC -> L2 -> Memory */
 
@@ -186,7 +178,9 @@ impl Memory {
         let event = AccessResult {
             addr: raw_addr,
             page_offset,
+            virtual_page_num,
             physical_page_num,
+            page_table_res,
             dc_tag: dc_response.tag,
             dc_idx: dc_response.idx,
             dc_res: Some(dc_response.result),

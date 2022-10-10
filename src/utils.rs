@@ -30,4 +30,10 @@ pub mod bits {
         let left = ( x &! mask) >> n;
         (left, right)
     }
+
+    /// Joins two u32s together at the bit index. Panics if anything gets truncated
+    pub fn join_at(x: u32, y: u32, n: u32) -> u32 {
+        let x_shifted = x << n;
+        x_shifted | y 
+    }
 }
