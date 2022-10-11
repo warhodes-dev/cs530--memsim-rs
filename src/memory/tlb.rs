@@ -11,6 +11,7 @@ pub struct TLBResponse {
     pub idx: u32,
     pub result: QueryResult,
     pub ppn: Option<u32>,
+    pub page_offset: u32,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -43,7 +44,8 @@ impl TLB {
     }
 
     /// Looks up vpn in TLB for a fast translation.
-    pub fn lookup(&mut self, vpn: u32) -> TLBResponse {
+    pub fn lookup(&mut self, addr: u32) -> TLBResponse {
+        let (vpn, page_offset) = bits::split_at(addr, self.config.offset_size);
         let (tag, idx) = bits::split_at(vpn, self.config.idx_size);
 
         let set = &mut self.sets[idx as usize];
@@ -58,6 +60,7 @@ impl TLB {
             tag, 
             idx, 
             ppn,
+            page_offset,
             result,
         }
     }

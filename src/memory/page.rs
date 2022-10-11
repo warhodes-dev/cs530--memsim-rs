@@ -11,10 +11,10 @@ struct PageFault {
 }
 
 pub struct PageTableResponse {
-    pub vpn: Option<u32>,
+    pub vpn: u32,
     pub ppn: u32,
     pub page_offset: u32,
-    pub res: Option<QueryResult>,
+    pub res: QueryResult,
     pub evicted_ppn: Option<u32>,
 }
 
@@ -44,10 +44,10 @@ impl PageTable {
             Some(ppn) => {
                 let res = QueryResult::Hit;
                 PageTableResponse { 
-                    vpn: Some(vpn),
+                    vpn: vpn,
                     ppn,
                     page_offset,
-                    res: Some(res), 
+                    res: res, 
                     evicted_ppn: None 
                 }
             },
@@ -56,18 +56,20 @@ impl PageTable {
                 let res = QueryResult::Miss;
                 let (ppn, evicted_ppn) = self.entries.push(vpn);
                 PageTableResponse { 
-                    vpn: Some(vpn),
+                    vpn: vpn,
                     ppn,
                     page_offset,
-                    res: Some(res),
+                    res: res,
                     evicted_ppn 
                 }
             }
         }
     }
 
-    /// Simply converts an addr into a ppn and offset based on config (no translation)
-    pub fn passthough(&self, addr: u32) -> PageTableResponse {
+    
+
+    /* Simply converts an addr into a ppn and offset based on config (no translation)
+    pub fn passthrough(&self, addr: u32) -> PageTableResponse {
         let (ppn, page_offset) = bits::split_at(addr, self.config.offset_size);
         PageTableResponse {
             vpn: None,
@@ -77,6 +79,7 @@ impl PageTable {
             evicted_ppn: None,
         }
     }
+    */
 }
 
 /* === LRU Set === */

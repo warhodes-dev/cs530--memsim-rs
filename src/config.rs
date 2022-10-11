@@ -64,6 +64,7 @@ pub struct TLBConfig {
     pub sets: u32,
     pub set_entries: u32,
     pub idx_size: u32,
+    pub offset_size: u32,
     pub enabled: bool,
 }
 
@@ -134,6 +135,8 @@ impl Config {
             let sets = opts[0].parse::<u32>()?;
             let set_entries = opts[1].parse::<u32>()?;
             let idx_size   = bits::min_repr(sets);
+            let _page_size = opts[4].parse::<u32>()?;
+            let offset_size = bits::min_repr(_page_size as u32) as u32;
 		    let enabled = opts[14] == "y";
             
             if sets > MAX_TLB_SETS {
@@ -146,7 +149,7 @@ impl Config {
                 error!("TLB associativity is {} but must be a power of 2", set_entries);
             }
 
-            TLBConfig { sets, set_entries, idx_size, enabled }
+            TLBConfig { sets, set_entries, idx_size, offset_size, enabled }
         };
 
 

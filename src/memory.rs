@@ -1,6 +1,8 @@
 mod page;
 mod tlb;
 mod cache;
+use std::option;
+
 use crate::{
     config::{self, Config, WritePolicy::*},
     memory::{
@@ -14,7 +16,7 @@ struct TranslationResponse {
     vpn: Option<u32>,
     ppn: u32,
     page_offset: u32,
-    page_table_res: Option<QueryResult>,
+    pt_response: Option<PageTableResponse>,
     tlb_response: Option<TLBResponse>,
 }
 
@@ -101,77 +103,87 @@ impl Memory {
 
         /* Step 1: Translate virtual address to physical address */
 
-        let (_, page_offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
-        let (pt_response, tlb_response) = match self.config.address_type {
-            // Address is alreaady physical, just get the ppn and page offset
+        let translation_response = match self.config.address_type {
             config::AddressType::Physical => {
-                let pt_response = self.pt.passthough(raw_addr);
-                (Some(pt_response), None)
+                let (ppn, page_offset) = bits::split_at(raw_addr, self.config.pt.offset_size);
+                TranslationResponse {
+                    ppn,
+                    page_offset,
+                    vpn: None,
+                    pt_response: None,
+                    tlb_response: None,
+                }
             },
-            // Convert virtual address to physical address as ppn and page offset
             config::AddressType::Virtual => {
-                let (vpn, _) = bits::split_at(raw_addr, self.config.pt.offset_size);
+                let ppn;
+                let vpn;
+                let page_offset;
 
-                let tlb_response = if self.config.tlb.enabled {
-                    Some(self.tlb.lookup(vpn))
-                } else {
-                    None
+                let optional_tlb_response = self.config.tlb.enabled.then_some(self.tlb.lookup(raw_addr));
+                let optional_pt_response = match optional_tlb_response {
+                    // TLB Disabled: go to page table
+                    None => Some(self.pt.translate(raw_addr)),
+                    // TLB Miss: go to page table
+                    Some(ref tlb_response) if tlb_response.result == QueryResult::Miss => 
+                        Some(self.pt.translate(raw_addr)),
+                    // TLB hit: No need to access page table
+                    Some(_/* TLB hit */) => None,
                 };
 
-                let pt_response = if tlb_response.is_some() 
-                    && tlb_response.unwrap().result == QueryResult::Miss {
+                // Invalidate entries in L2, DC, TLB, if a PTE was evicted
+                if let Some(evicted_ppn) = optional_pt_response.as_ref().map(|ptr| ptr.evicted_ppn).flatten() {
 
-                    let pt_response = self.pt.translate(vpn);
+                    #[cfg(debug_assertions)]
+                    println!("ppn {:x} evicted", evicted_ppn);
 
-                    // If a PTE got evicted, invalidate all corresponding entries
-                    if let Some(evicted_ppn) = pt_response.evicted_ppn {
-                        #[cfg(debug_assertions)]
-                        println!("ppn {:x} evicted", evicted_ppn);
-                        //self.tlb.clean_ppn(ppn);
-                        if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
-                            for writeback in dc_writebacks {
-                                self.l2.write(writeback);
-                            }
-                        }
-                        if let Some(l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
-                            for writeback in l2_writebacks {
-                                #[cfg(debug_assertions)]
+                    //self.tlb.clean_ppn(ppn);
+
+                    if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
+                        for writeback in dc_writebacks {
+                            let l2_response = self.l2.write(writeback);
+
+                            #[cfg(debug_assertions)]
+                            if let Some(writeback) = l2_response.writeback {
                                 println!("writing back {:x} main memory", writeback);
-                                //TODO: touch TLB and PTE entries!!!
                             }
                         }
                     }
-                    Some(pt_response)
+
+                    if let Some(l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
+                        for writeback in l2_writebacks {
+                            #[cfg(debug_assertions)]
+                            println!("writing back {:x} main memory", writeback);
+                        }
+                    }
+                }
+
+                // Get ppn, vpn, and page_offset for reporting 
+                if let Some(tlb_response) = optional_tlb_response.as_ref().filter(|t| t.result == QueryResult::Hit) {
+                    ppn = tlb_response.ppn.unwrap();
+                    vpn = tlb_response.vpn;
+                    page_offset = tlb_response.page_offset;
+                } else if let Some(ref pt_response) = optional_pt_response {
+                    ppn = pt_response.ppn;
+                    vpn = pt_response.vpn;
+                    page_offset = pt_response.page_offset;
                 } else {
-                    None
-                };
-                (pt_response, tlb_response)
+                    panic!("Somehow, neither the page table nor the tlb produced any ppn, vpn, or page_offset")
+                }
+
+                TranslationResponse {
+                    ppn,
+                    page_offset,
+                    vpn: Some(vpn),
+                    pt_response: optional_pt_response,
+                    tlb_response: optional_tlb_response,
+                }
             },
         };
 
-        // This shit is seriously heinous, try again
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        //
-        let ppn = tlb_response.map_or(pt_response.unwrap().ppn, |tlb_r| tlb_r.ppn);
+        let (pt_response, tlb_response) = (translation_response.pt_response, translation_response.tlb_response);
 
         // create the physical addr from the ppn and page offset
-        let physical_addr = bits::join_at(ppn, page_offset, self.config.pt.offset_size);
+        let physical_addr = bits::join_at(translation_response.ppn, translation_response.page_offset, self.config.pt.offset_size);
         let access_event = AccessEvent::from_raw(raw_access_type, physical_addr)?;
 
         /* Step 2: Try to access data in caches in the order of DC -> L2 -> Memory */
@@ -211,10 +223,13 @@ impl Memory {
 
         let mem_response = MemoryResponse {
             addr: raw_addr,
-            page_offset,
-            vpn,
-            ppn,
-            page_table_res,
+            page_offset: translation_response.page_offset,
+            vpn: translation_response.vpn,
+            ppn: translation_response.ppn,
+            page_table_res: pt_response.as_ref().map(|r| r.res),
+            tlb_tag: tlb_response.as_ref().map(|r| r.tag),
+            tlb_idx: tlb_response.as_ref().map(|r| r.idx),
+            tlb_res: tlb_response.as_ref().map(|r| r.result),
             dc_tag: dc_response.tag,
             dc_idx: dc_response.idx,
             dc_res: Some(dc_response.result),
