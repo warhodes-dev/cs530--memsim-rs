@@ -17,18 +17,8 @@ pub struct TLBResponse {
 #[derive(Debug, Copy, Clone)]
 pub struct TLBEntry {
     tag: u32,
-    addr: u32,
+    vpn: u32,
     ppn: u32,
-    dirty: bool,
-}
-
-impl TLBEntry {
-    fn enfilthen(&mut self) {
-        self.dirty = true;
-    }
-    fn is_dirty(&self) -> bool {
-        self.dirty
-    }
 }
 
 pub struct TLB {
@@ -67,7 +57,17 @@ impl TLB {
 
     /// Add a vpn-ppn translation to the TLB
     pub fn push(&mut self, vpn: u32, ppn: u32) {
-        unimplemented!()
+        let (tag, idx) = bits::split_at(vpn, self.config.idx_size);
+        let entry = TLBEntry { tag, vpn, ppn, };
+
+        self.sets[idx as usize].push(entry);
+    }
+
+    /// Removes all references to translations with the corresponding ppn
+    pub fn clean_ppn(&mut self, ppn: u32) {
+        for set in self.sets.iter_mut() {
+            set.invalidate_entries(ppn);
+        }
     }
 }
 
@@ -102,6 +102,7 @@ impl LRUSet {
             self.inner.pop_back()
         } else { None };
         self.inner.push_front(entry);
+
         evicted_item
     }
 
@@ -126,8 +127,8 @@ impl LRUSet {
         // Copy the entires LRU set, removing the invalid entries
         let new_inner = self.inner
             .iter()
-            // filter out invalid entries and push them to writebacks if dirty
-            .filter(|entry| entry.ppn == ppn)
+            // filter out invalid entries
+            .filter(|entry| entry.ppn != ppn)
             // take raw entries and box them up for shipping
             .map(|entry| entry.clone())
             .collect();
@@ -143,8 +144,8 @@ impl std::fmt::Debug for TLB {
         for (idx, set) in self.sets.iter().enumerate() {
             writeln!(f, "\tSet {:x}:", idx)?;
             for e in set.inner.iter() {
-                writeln!(f, "\t\taddr: {:x}\n\t\ttag: {:x}\n\t\tppn: {:x}\n\t\tdirty: {}",
-                    e.addr, e.tag, e.ppn, if e.is_dirty() { "yes" } else { "no" })?;
+                writeln!(f, "\t\tvpn: {:x}\n\t\ttag: {:x}\n\t\tppn: {:x}",
+                    e.vpn, e.tag, e.ppn, )?;
             }
         }
         Ok(())

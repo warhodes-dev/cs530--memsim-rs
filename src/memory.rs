@@ -123,11 +123,20 @@ impl Memory {
                 let optional_pt_response = match optional_tlb_response {
                     // TLB Disabled: go to page table
                     None => Some(self.pt.translate(raw_addr)),
-                    // TLB Miss: go to page table
-                    Some(ref tlb_response) if tlb_response.result == QueryResult::Miss => 
-                        Some(self.pt.translate(raw_addr)),
+                    // TLB Miss: go to page table and then update tlb
+                    Some(ref tlb_response) if tlb_response.result == QueryResult::Miss => {
+                        let pt_response = self.pt.translate(raw_addr);
+
+                        if let Some(evicted_ppn) = pt_response.evicted_ppn {
+                            // must invalidated tlb entries before inserting a new entry
+                            self.tlb.clean_ppn(evicted_ppn);
+                        }
+                        self.tlb.push(pt_response.vpn, pt_response.ppn);
+
+                        Some(pt_response)
+                    }
                     // TLB hit: No need to access page table
-                    Some(_/* TLB hit */) => None,
+                    Some(_/* TLB hit */) => { self.pt.translate(raw_addr); None}
                 };
 
                 // Invalidate entries in L2, DC, TLB, if a PTE was evicted
@@ -135,8 +144,6 @@ impl Memory {
 
                     #[cfg(debug_assertions)]
                     println!("ppn {:x} evicted", evicted_ppn);
-
-                    //self.tlb.clean_ppn(ppn);
 
                     if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
                         for writeback in dc_writebacks {
