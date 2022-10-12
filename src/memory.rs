@@ -1,13 +1,12 @@
 mod page;
 mod tlb;
 mod cache;
-use std::option;
 
 use crate::{
     config::{self, Config, WritePolicy::*},
     memory::{
         page::{PageTable, PageTableResponse},
-        cache::{CPUCache, CacheResponse}, 
+        cache::CPUCache, 
         tlb::{TLB,TLBResponse},
     }, utils::bits
 };
@@ -141,26 +140,14 @@ impl Memory {
 
                 // Invalidate entries in L2, DC, TLB, if a PTE was evicted
                 if let Some(evicted_ppn) = optional_pt_response.as_ref().map(|ptr| ptr.evicted_ppn).flatten() {
-
-                    #[cfg(debug_assertions)]
-                    println!("ppn {:x} evicted", evicted_ppn);
-
                     if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
                         for writeback in dc_writebacks {
-                            let l2_response = self.l2.write(writeback);
-
-                            #[cfg(debug_assertions)]
-                            if let Some(writeback) = l2_response.writeback {
-                                println!("writing back {:x} main memory", writeback);
-                            }
+                            let _l2_response = self.l2.write(writeback);
                         }
                     }
 
-                    if let Some(l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
-                        for writeback in l2_writebacks {
-                            #[cfg(debug_assertions)]
-                            println!("writing back {:x} main memory", writeback);
-                        }
+                    if let Some(_l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
+                        // This is where we would write back to main memory
                     }
                 }
 
@@ -200,11 +187,6 @@ impl Memory {
             AccessEvent::Write(addr) => self.dc.write(addr),
         };
         if let Some(writeback_addr) = dc_response.writeback {
-            if cfg!(debug_assertions) {
-                let (dc_block_addr, _offset) = bits::split_at(writeback_addr, self.config.dc.offset_size);
-                let (tag, idx) = bits::split_at(dc_block_addr, self.config.dc.idx_size);
-                println!("writeback dc -> L2 tag: {:x} idx: {:x}", tag, idx);
-            }
             self.l2.write_force(writeback_addr);
         }
 
@@ -212,8 +194,6 @@ impl Memory {
             match dc_response.result {
                 // If DC has a write through policy, then we write through to L2
                 QueryResult::Hit if access_event.is_write() && self.config.dc.write_policy == WriteThrough => {
-                    #[cfg(debug_assertions)]
-                    println!("writing through dc -> L2: {:x}", access_event.addr());
                     Some(self.l2.write(access_event.addr()))
                 },
                 QueryResult::Miss => {
@@ -248,20 +228,6 @@ impl Memory {
 
         Ok(mem_response)
     }
-
-    #[cfg(debug_assertions)]
-    pub fn dbg_invalidate(&mut self, ppn: u32) {
-        let writebacks = self.dc.clean_ppn(ppn);
-    }
-
-    #[cfg(debug_assertions)]
-    pub fn dbg_print_state(&self, id: u32) {
-        match id {
-            1 => println!("{:?}", self.dc),
-            2 => println!("{:?}", self.l2),
-            _ => println!("Invalid state ID.")
-        }
-    }
 }
 
 /// Details the interior behavior of a simulated access to the memory system.
@@ -283,15 +249,6 @@ pub struct MemoryResponse {
     l2_idx: Option<u32>,
     l2_res: Option<QueryResult>,
 }
-
- /*
-impl MemoryResponse { 
-    /// Verifies that the memory simulation behavior is at least in accordance with the config.
-    fn is_valid(&self, config: &Config) -> bool {
-        todo!()
-    }
-}
-*/
 
 impl std::fmt::Display for MemoryResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {

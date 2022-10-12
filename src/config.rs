@@ -69,7 +69,7 @@ pub struct TLBConfig {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct PageTableConfig { // TODO: move this to memoryconfig
+pub struct PageTableConfig {
     pub virtual_pages: u32,
     pub physical_pages: u32,
     pub max_physical_addr: u32,
@@ -91,7 +91,6 @@ pub struct CacheConfig {
     pub write_policy: WritePolicy,
     pub enabled: bool,
 
-    // TODO: Remove this; This is either a 1 or 2 for L1 vs L2. For debugging
     pub id: u8,
 }
 

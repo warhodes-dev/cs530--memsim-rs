@@ -5,11 +5,6 @@ use crate::{
     memory::QueryResult,
 };
 
-struct PageFault {
-    ppn: u32,
-    evicted_ppn: Option<u32>
-}
-
 pub struct PageTableResponse {
     pub vpn: u32,
     pub ppn: u32,
@@ -84,7 +79,7 @@ impl PageTable {
 
 /* === LRU Set === */
 
-use std::{collections::VecDeque, cell::RefCell, rc::Rc};
+use std::collections::VecDeque;
 #[derive(Clone, Debug)]
 /// A simple LRU Set which evicts elements upon insertion such that the set never exceeds `capacity`
 /// This one is tailored for use with the PageTable. DO NOT GENERALIZE THIS AGAIN, PLEASE.

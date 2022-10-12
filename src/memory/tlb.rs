@@ -73,7 +73,7 @@ impl TLB {
 
 /* === LRU Set === */
 
-use std::{collections::VecDeque, cell::RefCell, rc::Rc};
+use std::collections::VecDeque;
 
 /// A simple LRU Set which evicts elements upon insertion such that the set never exceeds `capacity`
 /// This one is tailored for use with the CPUCache. 

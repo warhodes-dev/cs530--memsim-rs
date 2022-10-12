@@ -36,7 +36,7 @@ pub struct CPUCache {
 
 impl CPUCache {
     pub fn new(config: config::CacheConfig, global_config: config::Config) -> Self {
-        let empty_set = LRUSet::new(config.set_entries as usize, config.id);
+        let empty_set = LRUSet::new(config.set_entries as usize);
         let sets = vec![ empty_set ; config.sets as usize ];
         CPUCache { sets, config, global_config, }
     }
@@ -160,13 +160,12 @@ use std::{collections::VecDeque, cell::RefCell, rc::Rc};
 struct LRUSet {
     inner: VecDeque<Rc<RefCell<CacheEntry>>>,
     capacity: usize,
-    id: u8,
 }
 
 impl LRUSet {
-    fn new(capacity: usize, id: u8) -> Self {
+    fn new(capacity: usize) -> Self {
         let inner = VecDeque::<Rc<RefCell<CacheEntry>>>::with_capacity(capacity);
-        LRUSet { inner, capacity, id }
+        LRUSet { inner, capacity }
     }
 
     /// Push an item to the LRU Set, potentially evicting the oldest item
@@ -207,14 +206,9 @@ impl LRUSet {
             // filter out invalid entries and push them to writebacks if dirty
             .filter_map(|entry| {
                 if entry.borrow().ppn == ppn {
-
-                    #[cfg(debug_assertions)]
-                    println!("entry {} in L{} is invalidated due to ppn {} being evicted", entry.borrow().addr, self.id, ppn);
-
                     if entry.borrow().is_dirty() {
                         writebacks.push(entry.borrow().addr);
                     }
-
                     None
                 } else {
                     Some(entry.borrow().clone())
