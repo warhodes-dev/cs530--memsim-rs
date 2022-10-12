@@ -64,12 +64,6 @@ impl CPUCache {
                 };
                 let evicted_block = set.push(new_entry);
 
-                if cfg!(debug_assertions) { //TODO: remove
-                    if let Some(eblock) = evicted_block {
-                        println!("block with addr {:x} evicted during read to L{}", eblock.addr, self.config.id);
-                    }
-                }
-
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
@@ -87,8 +81,16 @@ impl CPUCache {
         }
     }
 
-    /// Performs a write access to the cache according to the write policy.
+    pub fn write_force(&mut self, addr: u32) -> CacheResponse {
+        self.write_internal(addr, true)
+    }
+
     pub fn write(&mut self, addr: u32) -> CacheResponse {
+        self.write_internal(addr, false)
+    }
+
+    /// Performs a write access to the cache according to the write policy.
+    fn write_internal(&mut self, addr: u32, force: bool) -> CacheResponse {
         let (ppn, _page_offset) = bits::split_at(addr, self.global_config.pt.offset_size);
         let (block_addr, _block_offset) = bits::split_at(addr, self.config.offset_size);
         let (tag, idx) = bits::split_at(block_addr, self.config.idx_size);
@@ -103,7 +105,7 @@ impl CPUCache {
                 (QueryResult::Hit, None)
             },
             // No block found: Miss
-            None if self.config.write_miss_policy == NoWriteAllocate => {
+            None if self.config.write_miss_policy == NoWriteAllocate && !force => {
                 (QueryResult::Miss, None)
             },
             None => {
@@ -114,12 +116,6 @@ impl CPUCache {
                     dirty: true,
                 };
                 let evicted_block = set.push(new_entry);
-
-                if cfg!(debug_assertions) { //TODO: remove
-                    if let Some(eblock) = evicted_block {
-                        println!("block with addr {:x} evicted during write to L{}", eblock.addr, self.config.id);
-                    }
-                }
 
                 let writeback = evicted_block
                     .filter(|block| {

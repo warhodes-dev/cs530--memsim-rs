@@ -205,7 +205,7 @@ impl Memory {
                 let (tag, idx) = bits::split_at(dc_block_addr, self.config.dc.idx_size);
                 println!("writeback dc -> L2 tag: {:x} idx: {:x}", tag, idx);
             }
-            self.l2.write(writeback_addr);
+            self.l2.write_force(writeback_addr);
         }
 
         let l2_response: Option<cache::CacheResponse> = if self.config.l2.enabled {
