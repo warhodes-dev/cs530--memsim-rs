@@ -118,11 +118,15 @@ impl Memory {
                 let vpn;
                 let page_offset;
 
+                // FIXING THE CODE FOR SHIVAM: rustc 1.58 does not support this
+                //let optional_tlb_response = self.config.tlb.enabled.then_some(self.tlb.lookup(raw_addr));
+
                 let optional_tlb_response = if self.config.tlb.enabled {
                     Some(self.tlb.lookup(raw_addr))
                 } else {
                     None
                 };
+
                 let optional_pt_response = match optional_tlb_response {
                     // TLB Disabled: go to page table
                     None => Some(self.pt.translate(raw_addr)),
