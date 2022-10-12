@@ -87,14 +87,14 @@ impl Memory {
         // Make sure addr is a reasonable size
         match self.config.address_type {
             config::AddressType::Virtual => {
-                if raw_addr > self.config.pt.max_virtual_addr {
-                    error!("virtual address {:08x} is too large (maximum size is 0x{:x})",
+                if raw_addr > self.config.pt.max_virtual_addr - 1 {
+                    error!("virtual address {0:08x}({0}) is too large (maximum size is {0:08x}({1}))",
                         raw_addr, self.config.pt.max_virtual_addr - 1);
                 }
             },
             config::AddressType::Physical => {
-                if raw_addr > self.config.pt.max_physical_addr {
-                    error!("physical address {:08x} is too large (maximum size is 0x{:x})",
+                if raw_addr > self.config.pt.max_physical_addr - 1 {
+                    error!("physical address {0:08x}({0}) is too large (maximum size is {0:08x}({1}))",
                         raw_addr, self.config.pt.max_physical_addr - 1);
                 }
             }
