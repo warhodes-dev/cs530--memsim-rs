@@ -142,7 +142,14 @@ impl CPUCache {
                 writebacks.append(&mut set_writebacks);
             }
         }
-        (!writebacks.is_empty()).then_some(writebacks)
+        // FIXING THE CODE FOR SHIVAM: rustc 1.58 does not support this
+        //(!writebacks.is_empty()).then_some(writebacks)
+
+        if !writebacks.is_empty() {
+            Some(writebacks)
+        } else {
+            None
+        }
     }
 }
 
@@ -224,8 +231,15 @@ impl LRUSet {
         // -- This drops the old inner completely.
         self.inner = new_inner;
 
+        // FIXING THE CODE FOR SHIVAM: rustc 1.58 does not support this
+        //(!writebacks.is_empty()).then_some(writebacks)
+
         // Return the writebacks
-        (!writebacks.is_empty()).then_some(writebacks)
+        if !writebacks.is_empty() {
+            Some(writebacks)
+        } else {
+            None
+        }
     }
 }
 
