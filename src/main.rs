@@ -70,8 +70,7 @@ fn main() {
         let access_result = mem.access(trace_char, trace_addr);
         match access_result {
             Ok(access) => {
-                print!("{}", access);
-                println!()
+                println!("{}", access);
             }
             Err(e) => {
                 eprintln!("Invalid access: {}", e);
