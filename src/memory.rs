@@ -148,15 +148,8 @@ impl Memory {
 
                 // Invalidate entries in L2, DC, TLB, if a PTE was evicted
                 if let Some(evicted_ppn) = optional_pt_response.as_ref().map(|ptr| ptr.evicted_ppn).flatten() {
-                    if let Some(dc_writebacks) = self.dc.clean_ppn(evicted_ppn) {
-                        for writeback in dc_writebacks {
-                            let _l2_response = self.l2.write(writeback);
-                        }
-                    }
-
-                    if let Some(_l2_writebacks) = self.l2.clean_ppn(evicted_ppn) {
-                        // This is where we would write back to main memory
-                    }
+                    self.dc.clean_ppn(evicted_ppn);
+                    self.l2.clean_ppn(evicted_ppn);
                 }
 
                 // Get ppn, vpn, and page_offset for reporting 
@@ -215,6 +208,15 @@ impl Memory {
         } else {
             None
         };
+
+        if let Some(l2) = &l2_response {
+            if let Some(evicted_addr) = l2.eviction {
+                // if an address was evicted from L2, invalidate it in L1
+                if evicted_addr != access_event.addr() {
+                    self.dc.clean_addr(evicted_addr);
+                }
+            }
+        }
 
         let mem_response = MemoryResponse {
             addr: raw_addr,

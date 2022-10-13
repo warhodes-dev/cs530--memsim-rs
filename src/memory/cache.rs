@@ -9,6 +9,7 @@ pub struct CacheResponse {
     pub idx: u32,
     pub result: QueryResult,
     pub writeback: Option<u32>,
+    pub eviction: Option<u32>,
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -49,10 +50,10 @@ impl CPUCache {
 
         let set = &mut self.sets[idx as usize];
 
-        let (result, writeback) = match set.lookup(tag) {
+        let (result, writeback, eviction) = match set.lookup(tag) {
             // Some block found: Hit
             Some(_block) => {
-                (QueryResult::Hit, None)
+                (QueryResult::Hit, None, None)
             },
             // No block found: Miss
             None => {
@@ -63,13 +64,14 @@ impl CPUCache {
                     dirty: false,
                 };
                 let evicted_block = set.push(new_entry);
+                let evicted_addr = evicted_block.map(|b| b.addr);
 
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
                     })
                     .map(|block| block.addr);
-                (QueryResult::Miss, writeback)
+                (QueryResult::Miss, writeback, evicted_addr)
             },
         };
 
@@ -78,6 +80,7 @@ impl CPUCache {
             idx,
             result,
             writeback,
+            eviction,
         }
     }
 
@@ -96,17 +99,17 @@ impl CPUCache {
         let (tag, idx) = bits::split_at(block_addr, self.config.idx_size);
 
         let set = &mut self.sets[idx as usize];
-        let (result, writeback) = match set.lookup(tag) {
+        let (result, writeback, eviction) = match set.lookup(tag) {
             // Some block found: Hit
             Some(block) => {
                 if self.config.write_policy == WriteBack {
                     block.borrow_mut().enfilthen();
                 }
-                (QueryResult::Hit, None)
+                (QueryResult::Hit, None, None)
             },
             // No block found: Miss
             None if self.config.write_miss_policy == NoWriteAllocate && !force => {
-                (QueryResult::Miss, None)
+                (QueryResult::Miss, None, None)
             },
             None => {
                 let new_entry = CacheEntry {
@@ -116,13 +119,14 @@ impl CPUCache {
                     dirty: true,
                 };
                 let evicted_block = set.push(new_entry);
+                let evicted_addr = evicted_block.map(|b| b.addr);
 
                 let writeback = evicted_block
                     .filter(|block| {
                         block.is_dirty()
                     })
                     .map(|block| block.addr);
-                (QueryResult::Miss, writeback)
+                (QueryResult::Miss, writeback, evicted_addr)
             },
         };
 
@@ -131,6 +135,7 @@ impl CPUCache {
             idx,
             result,
             writeback,
+            eviction
         }
     }
 
@@ -138,7 +143,7 @@ impl CPUCache {
     pub fn clean_ppn(&mut self, ppn: u32) -> Option<Vec<u32>> {
         let mut writebacks = Vec::<u32>::new();
         for set in self.sets.iter_mut() {
-            if let Some(mut set_writebacks) = set.invalidate_entries(ppn) {
+            if let Some(mut set_writebacks) = set.invalidate_entries_by_ppn(ppn) {
                 writebacks.append(&mut set_writebacks);
             }
         }
@@ -146,6 +151,19 @@ impl CPUCache {
         //(!writebacks.is_empty()).then_some(writebacks)
 
         if !writebacks.is_empty() {
+            Some(writebacks)
+        } else {
+            None
+        }
+    }    
+    
+    pub fn clean_addr(&mut self, addr: u32) -> Option<Vec<u32>> {
+        let (_ppn, _page_offset) = bits::split_at(addr, self.global_config.pt.offset_size);
+        let (block_addr, _block_offset) = bits::split_at(addr, self.config.offset_size);
+        let (_tag, idx) = bits::split_at(block_addr, self.config.idx_size);
+
+        let set = &mut self.sets[idx as usize];
+        if let Some(writebacks) = set.invalidate_entries_by_addr(addr) {
             Some(writebacks)
         } else {
             None
@@ -204,7 +222,7 @@ impl LRUSet {
     }
 
     /// Evicts any entry that corresponds to the supplied ppn. Returns a list of writebacks
-    fn invalidate_entries(&mut self, ppn: u32) -> Option<Vec<u32>> {
+    fn invalidate_entries_by_ppn(&mut self, ppn: u32) -> Option<Vec<u32>> {
         let mut writebacks = Vec::new();
 
         // Copy the entire LRU set without the invalid entries
@@ -213,6 +231,45 @@ impl LRUSet {
             // filter out invalid entries and push them to writebacks if dirty
             .filter_map(|entry| {
                 if entry.borrow().ppn == ppn {
+                    if entry.borrow().is_dirty() {
+                        writebacks.push(entry.borrow().addr);
+                    }
+                    None
+                } else {
+                    Some(entry.borrow().clone())
+                }
+            })
+            // take raw entries and box them up for shipping
+            .map(|raw_entry| {
+                Rc::new(RefCell::new(raw_entry))
+            })
+            .collect();
+        
+        // Set the LRUSet's inner to be the filtered set
+        // -- This drops the old inner completely.
+        self.inner = new_inner;
+
+        // FIXING THE CODE FOR SHIVAM: rustc 1.58 does not support this
+        //(!writebacks.is_empty()).then_some(writebacks)
+
+        // Return the writebacks
+        if !writebacks.is_empty() {
+            Some(writebacks)
+        } else {
+            None
+        }
+    }
+
+    /// Evicts any entry that corresponds to the supplied ppn. Returns a list of writebacks
+    fn invalidate_entries_by_addr(&mut self, addr: u32) -> Option<Vec<u32>> {
+        let mut writebacks = Vec::new();
+
+        // Copy the entire LRU set without the invalid entries
+        let new_inner = self.inner
+            .iter()
+            // filter out invalid entries and push them to writebacks if dirty
+            .filter_map(|entry| {
+                if entry.borrow().addr == addr {
                     if entry.borrow().is_dirty() {
                         writebacks.push(entry.borrow().addr);
                     }
