@@ -212,9 +212,7 @@ impl Memory {
         if let Some(l2) = &l2_response {
             if let Some(evicted_addr) = l2.eviction {
                 // if an address was evicted from L2, invalidate it in L1
-                if evicted_addr != access_event.addr() {
-                    self.dc.clean_addr(evicted_addr);
-                }
+                self.dc.clean_addr(evicted_addr);
             }
         }
 
