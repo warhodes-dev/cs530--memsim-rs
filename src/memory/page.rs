@@ -61,10 +61,7 @@ impl PageTable {
         }
     }
 
-    pub fn touch(&mut self, addr: u32) {
-        let (ppn, _page_offset) = bits::split_at(addr, self.config.offset_size);
-        self.entries.touch_physical(ppn);
-    }
+    
 
     /* Simply converts an addr into a ppn and offset based on config (no translation)
     pub fn passthrough(&self, addr: u32) -> PageTableResponse {
@@ -141,17 +138,6 @@ impl LRUTable {
             Some(item.ppn)
         } else {
             None
-        }
-    }
-
-    fn touch_physical(&mut self, ppn: u32) {
-        let item_search = self.inner
-            .iter()
-            .position(|entry| entry.ppn == ppn);
-        
-        if let Some(item_idx) = item_search {
-            let item = self.inner.remove(item_idx).unwrap();
-            self.inner.push_front(item.clone());
         }
     }
 }
