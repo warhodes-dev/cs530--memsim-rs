@@ -210,8 +210,12 @@ impl Memory {
         };
 
         if let Some(l2) = &l2_response {
+            // Write back to main memory
+            if let Some(writeback) = l2.writeback {
+                self.pt.touch(writeback)
+            }
+            // Invalidate entries in L1 if there was an eviction from L2
             if let Some(evicted_addr) = l2.eviction {
-                // if an address was evicted from L2, invalidate it in L1
                 self.dc.clean_addr(evicted_addr);
             }
         }
