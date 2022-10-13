@@ -188,7 +188,11 @@ impl Memory {
             AccessEvent::Write(addr) => self.dc.write(addr),
         };
         if let Some(writeback_addr) = dc_response.writeback {
-            self.l2.write_force(writeback_addr);
+            let l2 = self.l2.write_force(writeback_addr);
+            if let Some(evicted_addr) = l2.eviction {
+                // if an address was evicted from L2, invalidate it in L1
+                self.dc.clean_addr(evicted_addr);
+            }
         }
 
         let l2_response: Option<cache::CacheResponse> = if self.config.l2.enabled {
